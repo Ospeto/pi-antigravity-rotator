@@ -19,24 +19,36 @@ export interface KeyAuthResult {
  * Extracts virtual key raw string from headers or query parameters.
  */
 export function extractVirtualKey(req: IncomingMessage): string | null {
-  const candidateHeaders = [
-    req.headers["authorization"],
-    req.headers["x-rotator-key"],
-    req.headers["x-api-key"],
-    req.headers["api-key"],
-    req.headers["x-goog-api-key"],
-  ];
-
-  for (const h of candidateHeaders) {
-    if (typeof h === "string") {
-      const match = h.match(/rk-[a-f0-9]{32}/i);
-      if (match) return match[0];
+  // 1. Authorization: Bearer rk-...
+  const authHeader = req.headers["authorization"];
+  if (authHeader) {
+    const parts = authHeader.split(" ");
+    if (parts.length === 2 && /^bearer$/i.test(parts[0])) {
+      const val = parts[1].trim();
+      if (val.startsWith("rk-")) return val;
     }
   }
 
+  // 2. Custom headers: x-rotator-key, x-api-key
+  const rotatorKeyHeader =
+    req.headers["x-rotator-key"] || req.headers["x-api-key"];
+  if (typeof rotatorKeyHeader === "string") {
+    const val = rotatorKeyHeader.trim();
+    if (val.startsWith("rk-")) return val;
+  }
+
+  // 3. Query string: ?rotator_key=rk-... or ?key=rk-...
   if (req.url && req.url.includes("rk-")) {
-    const match = req.url.match(/rk-[a-f0-9]{32}/i);
-    if (match) return match[0];
+    try {
+      const parsedUrl = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+      const param =
+        parsedUrl.searchParams.get("rotator_key") ||
+        parsedUrl.searchParams.get("key") ||
+        parsedUrl.searchParams.get("api_key");
+      if (param && param.startsWith("rk-")) return param.trim();
+    } catch {
+      // Ignore URL parse error
+    }
   }
 
   return null;
@@ -134,13 +146,6 @@ export function sendAuthErrorResponse(
   authResult: KeyAuthResult,
 ): void {
   const statusCode = authResult.statusCode || 401;
-  const maskedKey = authResult.rawKey
-    ? `${authResult.rawKey.slice(0, 6)}...${authResult.rawKey.slice(-4)}`
-    : "none";
-  console.warn(
-    `[key-auth] Rejected status=${statusCode} error="${authResult.error}" rawKey=${maskedKey}`,
-  );
-
   res.writeHead(statusCode, { "Content-Type": "application/json" });
   res.end(
     JSON.stringify({
