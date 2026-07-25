@@ -3,8 +3,7 @@ import type { VirtualKey } from "./types.js";
 import { isDbConfigured, queryDb } from "./db-store.js";
 
 const KEY_PREFIX = "rk-";
-const CACHE_TTL_MS = 60_000; // 1 minute in-memory cache for valid keys
-const NEGATIVE_CACHE_TTL_MS = 2_000; // 2 seconds in-memory cache for invalid keys
+const CACHE_TTL_MS = 60_000; // 1 minute in-memory cache
 
 interface CachedKey {
   key: VirtualKey | null;
@@ -144,11 +143,8 @@ export async function lookupVirtualKey(
   const now = Date.now();
   const cached = keyCache.get(tokenHash);
 
-  if (cached) {
-    const ttl = cached.key ? CACHE_TTL_MS : NEGATIVE_CACHE_TTL_MS;
-    if (now - cached.fetchedAt < ttl) {
-      return cached.key;
-    }
+  if (cached && now - cached.fetchedAt < CACHE_TTL_MS) {
+    return cached.key;
   }
 
   try {
