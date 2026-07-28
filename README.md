@@ -21,6 +21,16 @@ Multi-account rotation proxy for Google Antigravity. Distributes API usage acros
 
 </details>
 
+## Star History
+
+<a href="https://www.star-history.com/?repos=tuxevil%2Fpi-antigravity-rotator&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=tuxevil/pi-antigravity-rotator&type=date&theme=dark&legend=top-left&sealed_token=8wh5kvygQd6GIsVExqNTZygNW78hhSYw5bGgqlyDnBz6TOhdqJhMXucPyQBTFKCUqYIFaU105Xodf8VZoe8UqYtRjCyjuXgCigL9xya0ihwrte1LowcbZELL_eXtlgzcwew2sfdEGHrKY5uCGq_lik_xcZyKFdTQQ-9-2Gj_9mNjmAdzN-Q0VZHhJ9waTQ" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=tuxevil/pi-antigravity-rotator&type=date&legend=top-left&sealed_token=8wh5kvygQd6GIsVExqNTZygNW78hhSYw5bGgqlyDnBz6TOhdqJhMXucPyQBTFKCUqYIFaU105Xodf8VZoe8UqYtRjCyjuXgCigL9xya0ihwrte1LowcbZELL_eXtlgzcwew2sfdEGHrKY5uCGq_lik_xcZyKFdTQQ-9-2Gj_9mNjmAdzN-Q0VZHhJ9waTQ" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=tuxevil/pi-antigravity-rotator&type=date&legend=top-left&sealed_token=8wh5kvygQd6GIsVExqNTZygNW78hhSYw5bGgqlyDnBz6TOhdqJhMXucPyQBTFKCUqYIFaU105Xodf8VZoe8UqYtRjCyjuXgCigL9xya0ihwrte1LowcbZELL_eXtlgzcwew2sfdEGHrKY5uCGq_lik_xcZyKFdTQQ-9-2Gj_9mNjmAdzN-Q0VZHhJ9waTQ" />
+ </picture>
+</a>
+
 ## Support Me
 
 If this tool has helped you optimize your API usage and save costs, consider supporting its development!
