@@ -8,7 +8,7 @@
 [![Stars](https://img.shields.io/github/stars/tuxevil/pi-antigravity-rotator?style=social)](https://github.com/tuxevil/pi-antigravity-rotator/stargazers)
 [![Docker Image](https://img.shields.io/badge/ghcr.io-pi--antigravity--rotator-blue?logo=docker)](https://github.com/tuxevil/pi-antigravity-rotator/pkgs/container/pi-antigravity-rotator)
 
-[![Installations](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Ftelemetry.tuxevil.com%2Fv1%2Fpublic-stats&query=%24.installsFormatted&label=installations&color=6366f1&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMiAyQzYuNDggMiAyIDYuNDggMiAxMnM0LjQ4IDEwIDEwIDEwIDEwLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyek0xMiAyMGMtNC40MSAwLTgtMy41OS04LThzMy41OS04IDgtOCA4IDMuNTkgOCA4LTMuNTkgOC04IDh6bS0xLTEzdjZsNS0zbC01LTN6Ii8+PC9zdmc+)](https://telemetry.tuxevil.com/v1/public-stats)
+[![Installations](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Ftelemetry.tuxevil.com%2Fv1%2Fpublic-stats&query=%24.installsFormatted&label=installations&color=6366f1)](https://telemetry.tuxevil.com/v1/public-stats)
 [![Requests Routed](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Ftelemetry.tuxevil.com%2Fv1%2Fpublic-stats&query=%24.requestsFormatted&label=requests%20routed&color=10b981)](https://telemetry.tuxevil.com/v1/public-stats)
 [![Estimated Savings](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Ftelemetry.tuxevil.com%2Fv1%2Fpublic-stats&query=%24.savingsFormatted&label=estimated%20savings&color=f59e0b)](https://telemetry.tuxevil.com/v1/public-stats)
 
