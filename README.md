@@ -6,7 +6,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/tuxevil/pi-antigravity-rotator/ci.yml?logo=github&label=CI)](https://github.com/tuxevil/pi-antigravity-rotator/actions)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Stars](https://img.shields.io/github/stars/tuxevil/pi-antigravity-rotator?style=social)](https://github.com/tuxevil/pi-antigravity-rotator/stargazers)
-[![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker)](https://hub.docker.com/r/tuxevil/pi-antigravity-rotator)
+[![Docker Image](https://img.shields.io/badge/ghcr.io-pi--antigravity--rotator-blue?logo=docker)](https://github.com/tuxevil/pi-antigravity-rotator/pkgs/container/pi-antigravity-rotator)
 
 </div>
 
@@ -144,12 +144,22 @@ npm start
 
 ### Option C: Docker
 
+**Pre-built Docker Image (GHCR):**
+
+```bash
+docker pull ghcr.io/tuxevil/pi-antigravity-rotator:latest
+```
+
+**Using Docker Compose:**
+
 ```bash
 mkdir -p docker-data
 docker compose up -d
 ```
 
-The Docker image installs production dependencies only and runs as the non-root `node` user (UID/GID 1000). The included compose file persists runtime data under `./docker-data`, sets `PI_ROTATOR_DIR=/data`, and publishes the proxy on `127.0.0.1:51200` by default. On Linux, make sure `docker-data` is writable by UID 1000 if your host user differs. If you need LAN access, change the compose port mapping to `51200:51200` only on a trusted network or behind a firewall/reverse proxy.
+The Docker image is built multi-arch (`linux/amd64`, `linux/arm64`) and published to GitHub Container Registry. `docker-compose.yml` pulls the pre-built `ghcr.io/tuxevil/pi-antigravity-rotator:latest` image by default (to build locally from source instead, uncomment `build: .` in `docker-compose.yml`).
+
+The container runs as the non-root `node` user (UID/GID 1000). The included compose file persists runtime data under `./docker-data`, sets `PI_ROTATOR_DIR=/data`, and publishes the proxy on `127.0.0.1:51200` by default. On Linux, make sure `docker-data` is writable by UID 1000 if your host user differs. If you need LAN access, change the compose port mapping to `51200:51200` only on a trusted network or behind a firewall/reverse proxy.
 
 ## Adding Accounts
 

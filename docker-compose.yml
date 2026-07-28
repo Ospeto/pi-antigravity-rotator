@@ -1,6 +1,9 @@
 services:
   pi-antigravity-rotator:
-    build: .
+    # Use pre-built multi-arch image from GHCR (recommended)
+    image: ghcr.io/tuxevil/pi-antigravity-rotator:latest
+    # To build locally from source instead, comment out 'image' above and uncomment 'build' below:
+    # build: .
     container_name: pi-antigravity-rotator
     ports:
       - "127.0.0.1:51200:51200"
