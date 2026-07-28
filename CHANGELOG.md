@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-07-28
+
+### Added
+- **Automated GHCR Docker Build**: Added GitHub Actions workflow (`.github/workflows/docker-publish.yml`) for building multi-architecture (`linux/amd64`, `linux/arm64`) Docker images and publishing to GitHub Container Registry (`ghcr.io/tuxevil/pi-antigravity-rotator`).
+- **Pre-built Docker Image Support**: Updated `docker-compose.yml` to pull pre-built images from GHCR by default and updated `README.md` with `docker pull` instructions.
+
 ## [2.4.0] - 2026-07-23
 
 ### Added

@@ -71,6 +71,11 @@ To donate a quota-enabled account safely:
 5. **Revoke Access Anytime:** You retain full control over your account. If you wish to stop donating, simply go to your [Google Account Settings](https://myaccount.google.com/) -> **Security** -> **Your connections to third-party apps & services**, find the authorized application (e.g., **Google Cloud SDK**), and click **Remove Access**. The rotator will immediately lose access and disable the account on the next refresh attempt.
 
 
+## v2.5 Highlights
+
+- **Automated GHCR Multi-arch Builds**: Official Docker images (`linux/amd64`, `linux/arm64`) automatically built and published to GitHub Container Registry (`ghcr.io/tuxevil/pi-antigravity-rotator`).
+- **Pre-built Docker Deployment**: Updated `docker-compose.yml` to pull pre-built GHCR images directly out-of-the-box.
+
 ## v2.4 Highlights
 
 - **Virtual Keys & Scoped Access Control**: Generate scoped API keys (`rk-...`) with per-key model authorization rules and user tracking.
