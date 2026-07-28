@@ -21,6 +21,18 @@ Multi-account rotation proxy for Google Antigravity. Distributes API usage acros
 
 </details>
 
+<div align="center">
+
+[![npm version](https://img.shields.io/npm/v/pi-antigravity-rotator?logo=npm&label=version)](https://www.npmjs.com/package/pi-antigravity-rotator)
+[![Node](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen?logo=node.js)](package.json)
+[![License](https://img.shields.io/github/license/tuxevil/pi-antigravity-rotator?logo=opensourceinitiative)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/tuxevil/pi-antigravity-rotator/ci.yml?logo=github&label=CI)](https://github.com/tuxevil/pi-antigravity-rotator/actions)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Stars](https://img.shields.io/github/stars/tuxevil/pi-antigravity-rotator?style=social)](https://github.com/tuxevil/pi-antigravity-rotator/stargazers)
+[![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker)](https://hub.docker.com/r/tuxevil/pi-antigravity-rotator)
+
+</div>
+
 ## Star History
 
 <a href="https://www.star-history.com/?repos=tuxevil%2Fpi-antigravity-rotator&type=date&legend=top-left">
