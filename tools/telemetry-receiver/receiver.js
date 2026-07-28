@@ -684,7 +684,7 @@ function getPublicStats() {
 	}
 	try {
 		const stats = computeStats({});
-		const savingsTotal = stats.savings?.total ?? 0;
+		const savingsTotal = stats.savings?.totalUsd ?? 0;
 		const requests = stats.totalRequestsAcrossAll ?? 0;
 		const installs = stats.uniqueInstalls ?? 0;
 		publicStatsCache = {
