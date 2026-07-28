@@ -10,6 +10,8 @@
 
 [![Installations](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Ftelemetry.tuxevil.com%2Fv1%2Fpublic-stats&query=%24.installsFormatted&label=installations&color=6366f1)](https://telemetry.tuxevil.com/v1/public-stats)
 [![Requests Routed](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Ftelemetry.tuxevil.com%2Fv1%2Fpublic-stats&query=%24.requestsFormatted&label=requests%20routed&color=10b981)](https://telemetry.tuxevil.com/v1/public-stats)
+[![Input Tokens](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Ftelemetry.tuxevil.com%2Fv1%2Fpublic-stats&query=%24.tokensInputFormatted&label=input%20tokens&color=3b82f6)](https://telemetry.tuxevil.com/v1/public-stats)
+[![Output Tokens](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Ftelemetry.tuxevil.com%2Fv1%2Fpublic-stats&query=%24.tokensOutputFormatted&label=output%20tokens&color=8b5cf6)](https://telemetry.tuxevil.com/v1/public-stats)
 [![Estimated Savings](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Ftelemetry.tuxevil.com%2Fv1%2Fpublic-stats&query=%24.savingsFormatted&label=estimated%20savings&color=f59e0b)](https://telemetry.tuxevil.com/v1/public-stats)
 
 </div>

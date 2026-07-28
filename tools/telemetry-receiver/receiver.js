@@ -687,6 +687,15 @@ function getPublicStats() {
 		const savingsTotal = stats.savings?.totalUsd ?? 0;
 		const requests = stats.totalRequestsAcrossAll ?? 0;
 		const installs = stats.uniqueInstalls ?? 0;
+
+		// Aggregate total input/output tokens across all models
+		let totalInputTokens = 0;
+		let totalOutputTokens = 0;
+		for (const data of Object.values(stats.tokensByModel ?? {})) {
+			totalInputTokens += data.input || 0;
+			totalOutputTokens += data.output || 0;
+		}
+
 		publicStatsCache = {
 			installs,
 			installsFormatted: formatLargeNumber(installs),
@@ -694,6 +703,10 @@ function getPublicStats() {
 			requestsFormatted: formatLargeNumber(requests),
 			savingsUsd: savingsTotal,
 			savingsFormatted: `$${formatLargeNumber(Math.round(savingsTotal))}`,
+			tokensInput: totalInputTokens,
+			tokensInputFormatted: formatLargeNumber(totalInputTokens),
+			tokensOutput: totalOutputTokens,
+			tokensOutputFormatted: formatLargeNumber(totalOutputTokens),
 			updatedAt: new Date().toISOString(),
 		};
 		publicStatsCacheTs = now;

@@ -77,17 +77,21 @@ server {
 
 ```json
 {
-  "installs": 217,
-  "installsFormatted": "217",
-  "requests": 361000000,
-  "requestsFormatted": "361M",
-  "savingsUsd": 68000.00,
+  "installs": 226,
+  "installsFormatted": "226",
+  "requests": 361288770,
+  "requestsFormatted": "361.2M",
+  "savingsUsd": 67947.29,
   "savingsFormatted": "$68K",
+  "tokensInput": 48500000000,
+  "tokensInputFormatted": "48.5B",
+  "tokensOutput": 12300000000,
+  "tokensOutputFormatted": "12.3B",
   "updatedAt": "2026-07-28T12:00:00.000Z"
 }
 ```
 
-Results are cached for 5 minutes. Use `installsFormatted`, `requestsFormatted`, and `savingsFormatted` for human-readable display (e.g. shields.io dynamic badges).
+Results are cached for 5 minutes. The `*Formatted` fields are human-readable (e.g. `361.2M`, `$68K`) and suitable for shields.io dynamic badges.
 
 ## Environment Variables
 
