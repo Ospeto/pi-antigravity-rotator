@@ -78,7 +78,7 @@ function saveNotifications(notifications) {
 }
 
 const NOTIFICATION_TYPES = new Set(["info", "warning", "critical"]);
-const MAX_NOTIFICATION_STRING_LEN = 512;
+const MAX_NOTIFICATION_STRING_LEN = 2048;
 
 function isOptionalNotificationString(value) {
 	return value === undefined || value === null ||
