@@ -131,7 +131,7 @@ Point any OpenAI-compatible agent to `http://localhost:51200/v1` with API key `a
 
 ```mermaid
 graph LR
-    A[Your Agent] -->|OpenAI / Anthropic API| B[pi-antigravity-rotator\nlocalhost:51200]
+    A[Your Agent] -->|OpenAI / Anthropic API| B["pi-antigravity-rotator<br/>localhost:51200"]
     B -->|Smart Routing| C[Google Account 1]
     B -->|Smart Routing| D[Google Account 2]
     B -->|Smart Routing| E[Google Account N]
