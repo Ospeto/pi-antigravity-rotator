@@ -13,6 +13,7 @@
 // Endpoints:
 //   POST /v1/events         — Receive a telemetry payload
 //   GET  /v1/stats          — Aggregate stats (protected by STATS_TOKEN)
+//   GET  /v1/public-stats   — Public aggregate stats for badges (no auth, 5-min cache)
 //   GET  /v1/health         — Health check
 //
 // Environment:
@@ -662,6 +663,52 @@ function computeStats(filters = {}) {
 			avgRequestsBeforeFlag,
 		},
 	};
+}
+
+// ── Public stats cache (5-minute TTL, no auth required) ──────────────
+let publicStatsCache = null;
+let publicStatsCacheTs = 0;
+const PUBLIC_STATS_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function formatLargeNumber(n) {
+	if (n >= 1_000_000_000) return `${Math.floor(n / 1_000_000_000 * 10) / 10}B`;
+	if (n >= 1_000_000) return `${Math.floor(n / 1_000_000 * 10) / 10}M`;
+	if (n >= 1_000) return `${Math.floor(n / 1_000 * 10) / 10}K`;
+	return String(n);
+}
+
+function getPublicStats() {
+	const now = Date.now();
+	if (publicStatsCache && now - publicStatsCacheTs < PUBLIC_STATS_TTL_MS) {
+		return publicStatsCache;
+	}
+	try {
+		const stats = computeStats({});
+		const savingsTotal = stats.savings?.total ?? 0;
+		const requests = stats.totalRequestsAcrossAll ?? 0;
+		const installs = stats.uniqueInstalls ?? 0;
+		publicStatsCache = {
+			installs,
+			installsFormatted: formatLargeNumber(installs),
+			requests,
+			requestsFormatted: formatLargeNumber(requests),
+			savingsUsd: savingsTotal,
+			savingsFormatted: `$${formatLargeNumber(Math.round(savingsTotal))}`,
+			updatedAt: new Date().toISOString(),
+		};
+		publicStatsCacheTs = now;
+	} catch {
+		// Return last cache or zeros on failure
+		if (!publicStatsCache) {
+			publicStatsCache = {
+				installs: 0, installsFormatted: "0",
+				requests: 0, requestsFormatted: "0",
+				savingsUsd: 0, savingsFormatted: "$0",
+				updatedAt: new Date().toISOString(),
+			};
+		}
+	}
+	return publicStatsCache;
 }
 
 // ── Rate limiting (simple in-memory per-IP) ──────────────────────────
@@ -1649,6 +1696,24 @@ const server = createServer(async (req, res) => {
 		} catch {
 			res.writeHead(500, { "Content-Type": "application/json" });
 			res.end(JSON.stringify({ error: "Failed to delete notification" }));
+		}
+		return;
+	}
+
+	// Public stats (no auth required, 5-minute cache)
+	if (method === "GET" && url === "/v1/public-stats") {
+		const corsHeaders = {
+			"Content-Type": "application/json",
+			"Cache-Control": "public, max-age=300",
+			"Access-Control-Allow-Origin": "*",
+		};
+		try {
+			const stats = getPublicStats();
+			res.writeHead(200, corsHeaders);
+			res.end(JSON.stringify(stats));
+		} catch {
+			res.writeHead(500, corsHeaders);
+			res.end(JSON.stringify({ error: "Failed to compute public stats" }));
 		}
 		return;
 	}

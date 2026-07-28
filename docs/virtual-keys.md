@@ -1,0 +1,147 @@
+# Virtual Keys & Spend Logging
+
+Virtual Keys and Spend Logging require PostgreSQL. See [Setting up PostgreSQL](integrations/setup-postgresql.md) for a one-command setup prompt you can paste into any AI agent.
+
+Enable by setting:
+
+```bash
+export PI_ROTATOR_DATABASE_URL="postgres://user:pass@localhost:5432/rotatordb"
+```
+
+## Virtual Keys
+
+Virtual Keys (`rk-...`) let you issue scoped access credentials for individual agents, users, or teams — without sharing your admin token or Google account credentials.
+
+### How They Work
+
+- Format: `rk-{32 random hex chars}`
+- Only the PBKDF2 hash is stored in the database — the raw key is shown once at generation time
+- Each key can be restricted to specific models
+- Each key tracks usage independently
+- Once any virtual key exists, **all proxy requests require a valid key** (open mode disables automatically)
+
+### Managing Keys
+
+**Via Web UI** (`/dashboard/keys`):
+
+The dashboard provides a full CRUD interface for virtual keys: list, generate, update alias/models/blocked status, and delete.
+
+**Via CLI:**
+
+```bash
+# List all virtual keys
+pi-antigravity-rotator keys list
+
+# Generate a new key scoped to specific models
+pi-antigravity-rotator keys generate \
+  --alias "cursor-agent" \
+  --user-id "alice" \
+  --models "gemini-3.6-flash-high,claude-sonnet-4-6"
+
+# Delete a key by its hash
+pi-antigravity-rotator keys delete <hash>
+```
+
+**Via REST API** (admin-authenticated):
+
+```bash
+# List keys
+curl http://localhost:51200/api/keys \
+  -H "Authorization: Bearer <admin-token>"
+
+# Generate a key
+curl -X POST http://localhost:51200/api/keys/generate \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"alias": "my-agent", "userId": "alice", "models": ["gemini-3.6-flash-high"]}'
+
+# Update a key
+curl -X PUT http://localhost:51200/api/keys/<hash> \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"alias": "renamed", "blocked": false}'
+
+# Delete a key
+curl -X DELETE http://localhost:51200/api/keys/<hash> \
+  -H "Authorization: Bearer <admin-token>"
+```
+
+### Authenticating Requests with a Virtual Key
+
+Pass the virtual key from any agent using any of these methods:
+
+```bash
+# Bearer header (standard — works with all OpenAI-compatible clients)
+Authorization: Bearer rk-...
+
+# Custom headers
+x-rotator-key: rk-...
+x-api-key: rk-...
+
+# URL parameter (for dashboard browser access)
+http://localhost:51200/v1/chat/completions?rotator_key=rk-...
+```
+
+### Team Setup Example
+
+```
+Developer A  →  rk-abc123  (Flash models only, 100 RPM)
+Developer B  →  rk-def456  (All models)
+CI Pipeline  →  rk-ghi789  (Flash low only)
+              ↓
+        pi-antigravity-rotator
+              ↓
+        Google Accounts (pooled)
+```
+
+## Spend Logging
+
+When PostgreSQL is configured, every proxied request is recorded in a persistent audit trail.
+
+### What Is Logged
+
+| Field | Description |
+|-------|-------------|
+| Timestamp | Request start time |
+| Model | Model name requested |
+| Virtual key | Which key was used (hashed) |
+| Account | Which Google account served the request (masked) |
+| Input tokens | Prompt token count |
+| Output tokens | Completion token count |
+| TTFB | Time to first byte |
+| Total duration | End-to-end latency |
+| Cost (USD) | Estimated cost with 6-decimal precision |
+| Request payload | Full prompt (sanitized: large base64 media replaced with `[inline-media: N bytes]`) |
+| Response payload | Full completion, tool calls, thinking blocks |
+
+### Spend Logs Dashboard (`/dashboard/logs`)
+
+- **Filterable audit trail** by date range, model, virtual key, status
+- **Payload Inspector** — tabbed viewer for request messages, output choices, tool calls, and Gemini thinking blocks
+- **PII masking** — append `?mask=1` to the URL to redact sensitive content
+- **Column visibility** — show/hide any column
+- **Cost Breakdown** — per-request and aggregated USD estimates
+
+### REST API
+
+```bash
+# Query spend logs with filters
+GET /api/spend/logs?from=2025-01-01&to=2025-01-31&model=gemini-3.6-flash-high
+
+# Aggregated daily summary
+GET /api/spend/summary
+
+# Spend breakdown by virtual key
+GET /api/spend/by-key
+```
+
+All spend endpoints require admin authentication.
+
+### Retention
+
+Logs are automatically cleaned up. Configure via:
+
+```bash
+export PI_ROTATOR_LOG_RETENTION_DAYS=30   # default: 30 days for logs
+# Daily aggregates are retained for 90 days
+```

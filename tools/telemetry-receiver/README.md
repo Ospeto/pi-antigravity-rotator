@@ -68,7 +68,26 @@ server {
 |---|---|---|---|
 | `POST` | `/v1/events` | none | Receive telemetry payload |
 | `GET` | `/v1/stats` | `Bearer STATS_TOKEN` | Aggregate statistics |
+| `GET` | `/v1/public-stats` | none | Public aggregate stats for badges (5-min cache) |
 | `GET` | `/v1/health` | none | Health check |
+
+### Public Stats Response
+
+`GET /v1/public-stats` returns high-level aggregates with no auth required:
+
+```json
+{
+  "installs": 217,
+  "installsFormatted": "217",
+  "requests": 361000000,
+  "requestsFormatted": "361M",
+  "savingsUsd": 68000.00,
+  "savingsFormatted": "$68K",
+  "updatedAt": "2026-07-28T12:00:00.000Z"
+}
+```
+
+Results are cached for 5 minutes. Use `installsFormatted`, `requestsFormatted`, and `savingsFormatted` for human-readable display (e.g. shields.io dynamic badges).
 
 ## Environment Variables
 

@@ -15,7 +15,7 @@ token-usage.json
 .admin-token
 coverage/
 docker-data/
-ROADMAP.md
+# ROADMAP.md
 
 # Beads / Dolt files (added by bd init)
 .dolt/
