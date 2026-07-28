@@ -164,6 +164,8 @@ docker compose up -d
 
 The Docker image is built multi-arch (`linux/amd64`, `linux/arm64`) and published to GitHub Container Registry. `docker-compose.yml` pulls the pre-built `ghcr.io/tuxevil/pi-antigravity-rotator:latest` image by default (to build locally from source instead, uncomment `build: .` in `docker-compose.yml`).
 
+To enable **Virtual Keys** and **Spend Logging** inside Docker, add `PI_ROTATOR_DATABASE_URL` to your `docker-compose.yml` environment block (e.g. `PI_ROTATOR_DATABASE_URL: "postgres://user:pass@postgres_host:5432/rotatordb"`).
+
 The container runs as the non-root `node` user (UID/GID 1000). The included compose file persists runtime data under `./docker-data`, sets `PI_ROTATOR_DIR=/data`, and publishes the proxy on `127.0.0.1:51200` by default. On Linux, make sure `docker-data` is writable by UID 1000 if your host user differs. If you need LAN access, change the compose port mapping to `51200:51200` only on a trusted network or behind a firewall/reverse proxy.
 
 ## Adding Accounts

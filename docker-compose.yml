@@ -15,6 +15,8 @@ services:
       ANTIGRAVITY_CLIENT_SECRET: "${ANTIGRAVITY_CLIENT_SECRET:-}"
       ANTIGRAVITY_REDIRECT_URI: "${ANTIGRAVITY_REDIRECT_URI:-}"
       PI_ROTATOR_QUOTA_USER_AGENT: "${PI_ROTATOR_QUOTA_USER_AGENT:-}"
+      # Uncomment to enable PostgreSQL for Virtual Keys & Spend Logging:
+      # PI_ROTATOR_DATABASE_URL: "${PI_ROTATOR_DATABASE_URL:-}"
     volumes:
       - ./docker-data:/data
     restart: unless-stopped
