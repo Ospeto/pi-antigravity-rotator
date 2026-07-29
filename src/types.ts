@@ -74,6 +74,9 @@ export interface Config {
   tokenBucketMaxTokens?: number;
   tokenBucketRefillPerMinute?: number;
   tokenBucketInitialTokens?: number;
+  // Deduplicate in-flight / short-window identical requests to prevent duplicate upstream calls.
+  idempotencyEnabled?: boolean;
+  idempotencyWindowMs?: number;
   // Override per-model specs used by the compat layer. Keys are model id substrings
   // matched case-insensitively. When set, replaces the bundled defaults entirely.
   modelSpecs?: Record<string, ModelSpecConfig>;

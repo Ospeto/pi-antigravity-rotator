@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import { buildRotatorResponseHeaders } from "./response-headers.js";
+import { idempotencyManager } from "./idempotency.js";
 import { authenticateVirtualKey, sendAuthErrorResponse } from "./key-auth.js";
 import { logSpend } from "./spend-logger.js";
 import { hashKey } from "./virtual-keys.js";
@@ -1143,6 +1144,12 @@ async function completeResponsesViaRotator(
   return { completion: outcome.result, status: 200, streamed: true, context: outcome.context };
 }
 
+class NonOkOutcomeError extends Error {
+  constructor(public outcome: RotationOutcome<CompatCompletion>) {
+    super("Non-ok rotation outcome");
+  }
+}
+
 async function completeViaRotator(
   req: IncomingMessage,
   res: ServerResponse,
@@ -1162,63 +1169,101 @@ async function completeViaRotator(
   errorText?: string;
   streamed: boolean;
   context?: RotationAttemptContext;
+  isDeduplicated?: boolean;
 }> {
-  const outcome = await withRotation(
-    rotator,
-    body.model,
-    flattenHeaders(req.headers),
-    body,
-    async (response, context) => {
-      if (streamMode === "none") {
-        const raw = await response.text();
-        const completion = parseAntigravitySse(raw);
-        if (completion.inputTokens > 0 || completion.outputTokens > 0) {
-          rotator.recordTokenUsage(
-            body.displayModel || body.model,
-            completion.inputTokens,
-            completion.outputTokens,
+  const cfg = typeof rotator?.getConfig === "function" ? rotator.getConfig() : {};
+  const enabled = cfg.idempotencyEnabled === true;
+  const windowMs = cfg.idempotencyWindowMs ?? 2000;
+  const shouldDedup = enabled && streamMode === "none" && !idempotencyManager.isOptedOut(req);
+
+  const runWithRotation = () =>
+    withRotation(
+      rotator,
+      body.model,
+      flattenHeaders(req.headers),
+      body,
+      async (response, context) => {
+        if (streamMode === "none") {
+          const raw = await response.text();
+          const completion = parseAntigravitySse(raw);
+          if (completion.inputTokens > 0 || completion.outputTokens > 0) {
+            rotator.recordTokenUsage(
+              body.displayModel || body.model,
+              completion.inputTokens,
+              completion.outputTokens,
+            );
+          }
+          recordCompatOutcome(
+            rotator,
+            body,
+            context,
+            response.status,
+            completion,
+            undefined,
+            options,
           );
-        }
-        recordCompatOutcome(
-          rotator,
-          body,
-          context,
-          response.status,
-          completion,
-          undefined,
-          options,
-        );
-        return completion;
-      } else {
-        const completion = await streamCompatSse(
-          response.body,
-          req,
-          res,
-          body.displayModel || body.model,
-          streamMode,
-          context,
-          rotator,
-        );
-        if (completion.inputTokens > 0 || completion.outputTokens > 0) {
-          rotator.recordTokenUsage(
+          return completion;
+        } else {
+          const completion = await streamCompatSse(
+            response.body,
+            req,
+            res,
             body.displayModel || body.model,
-            completion.inputTokens,
-            completion.outputTokens,
+            streamMode,
+            context,
+            rotator,
           );
+          if (completion.inputTokens > 0 || completion.outputTokens > 0) {
+            rotator.recordTokenUsage(
+              body.displayModel || body.model,
+              completion.inputTokens,
+              completion.outputTokens,
+            );
+          }
+          recordCompatOutcome(
+            rotator,
+            body,
+            context,
+            response.status,
+            completion,
+            undefined,
+            options,
+          );
+          return completion;
         }
-        recordCompatOutcome(
-          rotator,
-          body,
-          context,
-          response.status,
-          completion,
-          undefined,
-          options,
-        );
-        return completion;
-      }
-    },
-  );
+      },
+    );
+
+  let outcome: RotationOutcome<CompatCompletion>;
+  let isDeduplicated = false;
+
+  if (shouldDedup) {
+    const clientKey = idempotencyManager.extractClientKey(req);
+    const key = idempotencyManager.computeKey(
+      body.model,
+      options?.rawRequest || body,
+      clientKey,
+    );
+    const dedupRes = await idempotencyManager
+      .execute(key, windowMs, async () => {
+        const res = await runWithRotation();
+        if (!res.ok) {
+          throw new NonOkOutcomeError(res);
+        }
+        return res;
+      })
+      .catch((err) => {
+        if (err instanceof NonOkOutcomeError) {
+          return { result: err.outcome, isDeduplicated: false };
+        }
+        throw err;
+      });
+    outcome = dedupRes.result;
+    isDeduplicated = dedupRes.isDeduplicated;
+  } else {
+    outcome = await runWithRotation();
+  }
+
   if (!outcome.ok) {
     recordCompatFailure(rotator, body, outcome, options);
     if (outcome.status === 404) {
@@ -1234,6 +1279,7 @@ async function completeViaRotator(
         : outcome.errorText,
       streamed: false,
       context: outcome.context,
+      isDeduplicated,
     };
   }
   return {
@@ -1241,6 +1287,7 @@ async function completeViaRotator(
     status: 200,
     streamed: streamMode !== "none",
     context: outcome.context,
+    isDeduplicated,
   };
 }
 
@@ -1469,6 +1516,7 @@ export async function handleGeminiGenerateContent(
     outputTokens: result.completion.outputTokens,
     healthScore: result.context?.account?.healthScore,
     routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
+    idempotencyHit: result.isDeduplicated,
   });
   writeJson(res, 200, {
     candidates: [
@@ -1569,6 +1617,7 @@ export async function handleOpenAIChatCompletions(
     outputTokens: result.completion.outputTokens,
     healthScore: result.context?.account?.healthScore,
     routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
+    idempotencyHit: result.isDeduplicated,
   });
   writeJson(res, 200, {
     id: `chatcmpl-${started.toString(36)}`,
@@ -1768,6 +1817,7 @@ export async function handleOpenAIResponsesCreate(
     outputTokens: result.completion.outputTokens,
     healthScore: result.context?.account?.healthScore,
     routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
+    idempotencyHit: result.isDeduplicated,
   });
   writeJson(res, 200, responseObject, rotatorHeaders);
 }
@@ -1952,6 +2002,7 @@ export async function handleAnthropicMessages(
     outputTokens: result.completion.outputTokens,
     healthScore: result.context?.account?.healthScore,
     routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
+    idempotencyHit: result.isDeduplicated,
   });
   writeJson(res, 200, {
     id: `msg_${started.toString(36)}`,

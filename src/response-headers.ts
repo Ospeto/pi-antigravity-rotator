@@ -28,6 +28,7 @@ export interface RotatorResponseHeaderOptions {
   outputTokens?: number;
   healthScore?: number;
   routingPolicy?: string;
+  idempotencyHit?: boolean;
 }
 
 /**
@@ -37,6 +38,10 @@ export function buildRotatorResponseHeaders(
   opts: RotatorResponseHeaderOptions,
 ): Record<string, string> {
   const headers: Record<string, string> = {};
+
+  if (opts.idempotencyHit) {
+    headers["X-Rotator-Idempotency-Hit"] = "true";
+  }
 
   if (opts.accountLabel) {
     headers["X-Rotator-Account"] = maskAccountLabel(opts.accountLabel);
