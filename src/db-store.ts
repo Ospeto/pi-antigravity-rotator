@@ -10,6 +10,10 @@ import type { PersistedResponsesStore } from "./responses-store.js";
 import { validateConfig } from "./validators.js";
 import { applyConfigDefaults } from "./config-defaults.js";
 import {
+  decryptAccountsInConfig,
+  encryptAccountsInConfig,
+} from "./token-encryption.js";
+import {
   type ISettingsRepository,
   PostgresSettingsRepository,
   FileSettingsRepository,
@@ -88,7 +92,12 @@ export function getCachedConfig(): Config | null {
     const parsed = JSON.parse(raw);
     const validation = validateConfig(parsed);
     if (validation.ok && validation.value) {
-      return applyConfigDefaults(validation.value);
+      const withDefaults = applyConfigDefaults(validation.value);
+      const { config: decryptedConfig, migrated } = decryptAccountsInConfig(withDefaults);
+      if (migrated) {
+        setCachedConfig(decryptedConfig);
+      }
+      return decryptedConfig;
     }
   } catch (err) {
     console.error(`Failed to parse accounts config from repository: ${err}`);
@@ -99,7 +108,8 @@ export function getCachedConfig(): Config | null {
 export function setCachedConfig(config: Config): void {
   assertInitialized();
   const withDefaults = applyConfigDefaults(config);
-  repository.set("accounts_json", JSON.stringify(withDefaults, null, 2));
+  const encryptedConfig = encryptAccountsInConfig(withDefaults);
+  repository.set("accounts_json", JSON.stringify(encryptedConfig, null, 2));
 }
 
 // --- Admin token ---
