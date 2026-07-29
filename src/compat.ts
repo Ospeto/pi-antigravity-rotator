@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
+import { buildRotatorResponseHeaders } from "./response-headers.js";
 import { authenticateVirtualKey, sendAuthErrorResponse } from "./key-auth.js";
 import { logSpend } from "./spend-logger.js";
 import { hashKey } from "./virtual-keys.js";
@@ -356,6 +357,8 @@ async function streamCompatSse(
   res: ServerResponse,
   model: string,
   format: "openai" | "anthropic",
+  context?: RotationAttemptContext,
+  rotator?: AccountRotator,
 ): Promise<CompatCompletion> {
   const nodeStream = Readable.fromWeb(
     body as import("node:stream/web").ReadableStream,
@@ -380,11 +383,20 @@ async function streamCompatSse(
   let anthropicHasToolUse = false;
   const anthropicToolCalls: OpenAIToolCall[] = [];
 
+  const rotatorHeaders = buildRotatorResponseHeaders({
+    accountLabel: context?.label,
+    model,
+    ttfbMs: Date.now() - (context?.requestStartMs ?? streamStartMs),
+    healthScore: context?.account?.healthScore,
+    routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
+  });
+
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
     Connection: "keep-alive",
     "X-Accel-Buffering": "no",
+    ...rotatorHeaders,
   });
 
   if (format === "openai") {
@@ -696,6 +708,8 @@ async function streamResponsesSse(
   responseId: string,
   previousResponseId: string | null,
   createdAt: number,
+  context?: RotationAttemptContext,
+  rotator?: AccountRotator,
 ): Promise<CompatCompletion> {
   const nodeStream = Readable.fromWeb(
     body as import("node:stream/web").ReadableStream,
@@ -726,11 +740,20 @@ async function streamResponsesSse(
   req.once("close", closeUpstreamForClient);
   responseEvents.once?.("close", closeUpstreamForClient);
 
+  const rotatorHeaders = buildRotatorResponseHeaders({
+    accountLabel: context?.label,
+    model: request.model,
+    ttfbMs: Date.now() - (context?.requestStartMs ?? streamStartMs),
+    healthScore: context?.account?.healthScore,
+    routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
+  });
+
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
     Connection: "keep-alive",
     "X-Accel-Buffering": "no",
+    ...rotatorHeaders,
   });
   const emptyCompletion: CompatCompletion = {
     text: "",
@@ -1066,6 +1089,7 @@ async function completeResponsesViaRotator(
   status: number;
   errorText?: string;
   streamed: boolean;
+  context?: RotationAttemptContext;
 }> {
   const createdAt = Math.floor(Date.now() / 1000);
   const outcome = await withRotation(
@@ -1082,6 +1106,8 @@ async function completeResponsesViaRotator(
         responseId,
         previousResponseId,
         createdAt,
+        context,
+        rotator,
       );
       if (completion.inputTokens > 0 || completion.outputTokens > 0) {
         rotator.recordTokenUsage(
@@ -1111,9 +1137,10 @@ async function completeResponsesViaRotator(
         ? `${outcome.errorText}; retryAfterMs=${outcome.retryAfterMs}`
         : outcome.errorText,
       streamed: false,
+      context: outcome.context,
     };
   }
-  return { completion: outcome.result, status: 200, streamed: true };
+  return { completion: outcome.result, status: 200, streamed: true, context: outcome.context };
 }
 
 async function completeViaRotator(
@@ -1134,6 +1161,7 @@ async function completeViaRotator(
   status: number;
   errorText?: string;
   streamed: boolean;
+  context?: RotationAttemptContext;
 }> {
   const outcome = await withRotation(
     rotator,
@@ -1168,6 +1196,8 @@ async function completeViaRotator(
           res,
           body.displayModel || body.model,
           streamMode,
+          context,
+          rotator,
         );
         if (completion.inputTokens > 0 || completion.outputTokens > 0) {
           rotator.recordTokenUsage(
@@ -1203,12 +1233,14 @@ async function completeViaRotator(
         ? `${outcome.errorText}; retryAfterMs=${outcome.retryAfterMs}`
         : outcome.errorText,
       streamed: false,
+      context: outcome.context,
     };
   }
   return {
     completion: outcome.result,
     status: 200,
     streamed: streamMode !== "none",
+    context: outcome.context,
   };
 }
 
@@ -1410,6 +1442,7 @@ export async function handleGeminiGenerateContent(
       tools: parsed.tools,
     },
   };
+  const started = Date.now();
   const result = await completeViaRotator(req, res, rotator, body, "none", {
     callType: "gemini",
     apiKeyHash,
@@ -1425,6 +1458,18 @@ export async function handleGeminiGenerateContent(
     });
   }
   if (result.streamed) return;
+  const totalMs = Date.now() - started;
+  const ttfbMs = result.completion.firstByteMs ?? totalMs;
+  const rotatorHeaders = buildRotatorResponseHeaders({
+    accountLabel: result.context?.label,
+    model,
+    latencyMs: totalMs,
+    ttfbMs,
+    inputTokens: result.completion.inputTokens,
+    outputTokens: result.completion.outputTokens,
+    healthScore: result.context?.account?.healthScore,
+    routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
+  });
   writeJson(res, 200, {
     candidates: [
       {
@@ -1441,7 +1486,7 @@ export async function handleGeminiGenerateContent(
       totalTokenCount:
         result.completion.inputTokens + result.completion.outputTokens,
     },
-  });
+  }, rotatorHeaders);
 }
 
 export async function handleOpenAIChatCompletions(
@@ -1513,6 +1558,18 @@ export async function handleOpenAIChatCompletions(
   }
   const hasToolCalls =
     result.completion.toolCalls && result.completion.toolCalls.length > 0;
+  const totalMs = Date.now() - started;
+  const ttfbMs = result.completion.firstByteMs ?? totalMs;
+  const rotatorHeaders = buildRotatorResponseHeaders({
+    accountLabel: result.context?.label,
+    model: validation.value.model,
+    latencyMs: totalMs,
+    ttfbMs,
+    inputTokens: result.completion.inputTokens,
+    outputTokens: result.completion.outputTokens,
+    healthScore: result.context?.account?.healthScore,
+    routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
+  });
   writeJson(res, 200, {
     id: `chatcmpl-${started.toString(36)}`,
     object: "chat.completion",
@@ -1539,7 +1596,7 @@ export async function handleOpenAIChatCompletions(
       total_tokens:
         result.completion.inputTokens + result.completion.outputTokens,
     },
-  });
+  }, rotatorHeaders);
 }
 
 export async function handleOpenAIResponsesCreate(
@@ -1700,7 +1757,19 @@ export async function handleOpenAIResponsesCreate(
   } else {
     responsesStore.delete(responseId);
   }
-  writeJson(res, 200, responseObject);
+  const totalMs = Date.now() - (createdAt * 1000);
+  const ttfbMs = result.completion.firstByteMs ?? totalMs;
+  const rotatorHeaders = buildRotatorResponseHeaders({
+    accountLabel: result.context?.label,
+    model: validation.value.model,
+    latencyMs: totalMs,
+    ttfbMs,
+    inputTokens: result.completion.inputTokens,
+    outputTokens: result.completion.outputTokens,
+    healthScore: result.context?.account?.healthScore,
+    routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
+  });
+  writeJson(res, 200, responseObject, rotatorHeaders);
 }
 
 export function handleOpenAIResponsesRetrieve(
@@ -1872,6 +1941,18 @@ export async function handleAnthropicMessages(
     result.completion.toolCalls && result.completion.toolCalls.length > 0
       ? "tool_use"
       : "end_turn";
+  const totalMs = Date.now() - started;
+  const ttfbMs = result.completion.firstByteMs ?? totalMs;
+  const rotatorHeaders = buildRotatorResponseHeaders({
+    accountLabel: result.context?.label,
+    model: validation.value.model,
+    latencyMs: totalMs,
+    ttfbMs,
+    inputTokens: result.completion.inputTokens,
+    outputTokens: result.completion.outputTokens,
+    healthScore: result.context?.account?.healthScore,
+    routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
+  });
   writeJson(res, 200, {
     id: `msg_${started.toString(36)}`,
     type: "message",
@@ -1884,5 +1965,5 @@ export async function handleAnthropicMessages(
       input_tokens: result.completion.inputTokens,
       output_tokens: result.completion.outputTokens,
     },
-  });
+  }, rotatorHeaders);
 }

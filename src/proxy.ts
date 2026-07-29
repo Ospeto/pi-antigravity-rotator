@@ -1,5 +1,6 @@
 // HTTP reverse proxy - forwards requests to Antigravity with credential rotation
 
+import { buildRotatorResponseHeaders } from "./response-headers.js";
 import {
   createServer,
   type IncomingMessage,
@@ -131,7 +132,7 @@ export interface RotationAttemptContext {
 }
 
 export type RotationOutcome<T> =
-  | { ok: true; result: T; endpoint: string }
+  | { ok: true; result: T; endpoint: string; context?: RotationAttemptContext }
   | {
       ok: false;
       status: number;
@@ -1113,7 +1114,7 @@ export async function withRotation<T>(
       if (shouldRotate) {
         await rotateAndRelease();
       }
-      return { ok: true, result, endpoint };
+      return { ok: true, result, endpoint, context };
     } catch (err) {
       const formattedError = formatError(err);
       log(
@@ -1447,6 +1448,15 @@ async function handleProxyRequest(
           responseHeaders[key] = value;
         }
       });
+
+      const rotatorHeaders = buildRotatorResponseHeaders({
+        accountLabel: label,
+        model: displayModelKey || body.displayModel || body.model,
+        ttfbMs: Date.now() - requestStartMs,
+        healthScore: account.healthScore,
+        routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
+      });
+      Object.assign(responseHeaders, rotatorHeaders);
 
       res.writeHead(response.status, responseHeaders);
 

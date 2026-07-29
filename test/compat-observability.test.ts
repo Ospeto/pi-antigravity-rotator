@@ -43,6 +43,7 @@ type Tracking = {
 
 type ResponseStub = ServerResponse & {
   statusCodeCaptured: number;
+  headersCaptured: Record<string, string>;
   body: string;
 };
 
@@ -175,6 +176,7 @@ function responseStub(): ResponseStub {
   let writableEnded = false;
   const res = {
     statusCodeCaptured: 0,
+    headersCaptured: {},
     body: "",
     get headersSent() {
       return headersSent;
@@ -182,8 +184,11 @@ function responseStub(): ResponseStub {
     get writableEnded() {
       return writableEnded;
     },
-    writeHead(status: number) {
+    writeHead(status: number, headers?: Record<string, string>) {
       this.statusCodeCaptured = status;
+      if (headers) {
+        Object.assign(this.headersCaptured, headers);
+      }
       headersSent = true;
       return this;
     },
@@ -395,6 +400,13 @@ describe("compat observability", () => {
         assert.equal(tracking.tokenUsage[0].inputTokens, 11);
         assert.equal(tracking.tokenUsage[0].outputTokens, 7);
         assert.equal(tracking.recordRequests, 1, testCase.name);
+        assert.equal(res.headersCaptured["X-Rotator-Account"], "te***nt", testCase.name);
+        assert.ok(res.headersCaptured["X-Rotator-Model"], testCase.name);
+        assert.equal(res.headersCaptured["X-Rotator-Tokens-Input"], "11", testCase.name);
+        assert.equal(res.headersCaptured["X-Rotator-Tokens-Output"], "7", testCase.name);
+        assert.ok(res.headersCaptured["X-Rotator-Cost-Usd"], testCase.name);
+        assert.equal(res.headersCaptured["X-Rotator-Health-Score"], "1.00", testCase.name);
+        assert.equal(res.headersCaptured["X-Rotator-Routing-Policy"], "timer-first", testCase.name);
       }
     } finally {
       await closeServer(upstream.server);
