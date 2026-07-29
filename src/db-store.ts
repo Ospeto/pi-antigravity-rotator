@@ -95,7 +95,9 @@ export function getCachedConfig(): Config | null {
       const withDefaults = applyConfigDefaults(validation.value);
       const { config: decryptedConfig, migrated } = decryptAccountsInConfig(withDefaults);
       if (migrated) {
-        setCachedConfig(decryptedConfig);
+        void setCachedConfig(decryptedConfig).catch((err) => {
+          console.error(`Failed to persist migrated accounts config: ${err}`);
+        });
       }
       return decryptedConfig;
     }
@@ -105,11 +107,11 @@ export function getCachedConfig(): Config | null {
   return null;
 }
 
-export function setCachedConfig(config: Config): void {
+export async function setCachedConfig(config: Config): Promise<void> {
   assertInitialized();
   const withDefaults = applyConfigDefaults(config);
   const encryptedConfig = encryptAccountsInConfig(withDefaults);
-  repository.set("accounts_json", JSON.stringify(encryptedConfig, null, 2));
+  await repository.set("accounts_json", JSON.stringify(encryptedConfig, null, 2));
 }
 
 // --- Admin token ---
@@ -120,9 +122,9 @@ export function getCachedAdminToken(): string | null {
   return raw ? raw.trim() : null;
 }
 
-export function setCachedAdminToken(token: string): void {
+export async function setCachedAdminToken(token: string): Promise<void> {
   assertInitialized();
-  repository.set("admin_token", token.trim());
+  await repository.set("admin_token", token.trim());
 }
 
 // --- Rotator state ---
@@ -139,9 +141,9 @@ export function getCachedState(): PersistedState | null {
   }
 }
 
-export function setCachedState(state: PersistedState): void {
+export async function setCachedState(state: PersistedState): Promise<void> {
   assertInitialized();
-  repository.set("rotator_state", JSON.stringify(state));
+  await repository.set("rotator_state", JSON.stringify(state));
 }
 
 // --- Token usage ---
@@ -158,9 +160,9 @@ export function getCachedTokenUsage(): TokenUsageTiered | null {
   }
 }
 
-export function setCachedTokenUsage(usage: TokenUsageTiered): void {
+export async function setCachedTokenUsage(usage: TokenUsageTiered): Promise<void> {
   assertInitialized();
-  repository.set("token_usage", JSON.stringify(usage));
+  await repository.set("token_usage", JSON.stringify(usage));
 }
 
 // --- Responses store ---
@@ -177,7 +179,9 @@ export function getCachedResponsesStore(): PersistedResponsesStore | null {
   }
 }
 
-export function setCachedResponsesStore(store: PersistedResponsesStore): void {
+export async function setCachedResponsesStore(
+  store: PersistedResponsesStore,
+): Promise<void> {
   assertInitialized();
-  repository.set("responses_store", JSON.stringify(store));
+  await repository.set("responses_store", JSON.stringify(store));
 }

@@ -38,8 +38,8 @@ export function readPersistedAdminToken(): string | null {
   return getCachedAdminToken();
 }
 
-export function writePersistedAdminToken(token: string): void {
-  setCachedAdminToken(token);
+export async function writePersistedAdminToken(token: string): Promise<void> {
+  await setCachedAdminToken(token);
 }
 
 export interface ResolvedAdminToken {
@@ -55,9 +55,9 @@ export interface ResolvedAdminToken {
  * When a token is generated, it is persisted to the repository and returned.
  * The caller is responsible for printing it to the operator.
  */
-export function ensureAdminToken(
+export async function ensureAdminToken(
   env: NodeJS.ProcessEnv = process.env,
-): ResolvedAdminToken {
+): Promise<ResolvedAdminToken> {
   const envToken = env.PI_ROTATOR_ADMIN_TOKEN?.trim();
   if (envToken) {
     return { token: envToken, source: "env", generated: false };
@@ -70,7 +70,7 @@ export function ensureAdminToken(
 
   const newToken = generateAdminToken();
   try {
-    writePersistedAdminToken(newToken);
+    await writePersistedAdminToken(newToken);
   } catch {
     // If we cannot persist (e.g. DB down, read-only fs), still return the
     // token for this session. The next restart will simply generate again.

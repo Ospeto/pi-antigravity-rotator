@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { getAccountsPath } from "./paths.js";
@@ -58,41 +58,41 @@ function validateAccountConfigLengths(entry: AccountConfig): void {
 
 export { validateAccountConfigLengths };
 
-export function addAccountToConfig(entry: AccountConfig): { isNew: boolean } {
+export async function addAccountToConfig(
+  entry: AccountConfig,
+): Promise<{ isNew: boolean }> {
   validateAccountConfigLengths(entry);
   const config = loadOrCreateAccountsConfig();
   const existing = config.accounts.findIndex((a) => a.email === entry.email);
 
   if (existing >= 0) {
     config.accounts[existing] = { ...config.accounts[existing], ...entry };
-    saveAccountsConfig(config);
+    await saveAccountsConfig(config);
     return { isNew: false };
   }
 
   config.accounts.push(entry);
-  saveAccountsConfig(config);
+  await saveAccountsConfig(config);
   return { isNew: true };
 }
 
-export function removeAccountFromConfig(email: string): boolean {
+export async function removeAccountFromConfig(email: string): Promise<boolean> {
   const config = loadOrCreateAccountsConfig();
   const idx = config.accounts.findIndex((a) => a.email === email);
   if (idx < 0) return false;
   config.accounts.splice(idx, 1);
-  saveAccountsConfig(config);
+  await saveAccountsConfig(config);
   return true;
 }
 
-export function ensurePiModelsConfig(): void {
-  mkdirSync(PI_DIR, { recursive: true });
+export async function ensurePiModelsConfig(): Promise<void> {
+  await mkdir(PI_DIR, { recursive: true });
 
   let models: Record<string, unknown> = {};
-  if (existsSync(PI_MODELS_FILE)) {
-    try {
-      models = JSON.parse(readFileSync(PI_MODELS_FILE, "utf-8"));
-    } catch {
-      // Corrupted, will overwrite
-    }
+  try {
+    models = JSON.parse(await readFile(PI_MODELS_FILE, "utf-8"));
+  } catch {
+    // Missing or corrupted, will overwrite.
   }
 
   const providers = (models.providers || {}) as Record<
@@ -109,20 +109,18 @@ export function ensurePiModelsConfig(): void {
   providers["google-antigravity"] = antigravity;
   models.providers = providers;
 
-  writeJsonFileAtomic(PI_MODELS_FILE, models);
+  await writeJsonFileAtomic(PI_MODELS_FILE, models);
   console.log(`  Updated ${PI_MODELS_FILE}`);
 }
 
-export function ensurePiAuthConfig(): void {
-  mkdirSync(PI_DIR, { recursive: true });
+export async function ensurePiAuthConfig(): Promise<void> {
+  await mkdir(PI_DIR, { recursive: true });
 
   let auth: Record<string, unknown> = {};
-  if (existsSync(PI_AUTH_FILE)) {
-    try {
-      auth = JSON.parse(readFileSync(PI_AUTH_FILE, "utf-8"));
-    } catch {
-      // Corrupted, will overwrite
-    }
+  try {
+    auth = JSON.parse(await readFile(PI_AUTH_FILE, "utf-8"));
+  } catch {
+    // Missing or corrupted, will overwrite.
   }
 
   const existing = auth["google-antigravity"] as
@@ -140,6 +138,6 @@ export function ensurePiAuthConfig(): void {
     projectId: "proxy-managed",
   };
 
-  writeJsonFileAtomic(PI_AUTH_FILE, auth);
+  await writeJsonFileAtomic(PI_AUTH_FILE, auth);
   console.log(`  Updated ${PI_AUTH_FILE}`);
 }

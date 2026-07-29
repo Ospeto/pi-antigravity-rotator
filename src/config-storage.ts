@@ -16,6 +16,6 @@ export function loadOrCreateAccountsConfig(): Config {
   }
 }
 
-export function saveAccountsConfig(config: Config): void {
-  setCachedConfig(config);
+export async function saveAccountsConfig(config: Config): Promise<void> {
+  await setCachedConfig(config);
 }

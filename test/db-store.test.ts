@@ -56,7 +56,7 @@ describe("db-store helpers", () => {
     assert.equal(isDbConfigured(), false);
   });
 
-  it("can cache and retrieve configuration", () => {
+  it("can cache and retrieve configuration", async () => {
     const mockConfig: Config = {
       proxyPort: 51200,
       accounts: [],
@@ -84,18 +84,18 @@ describe("db-store helpers", () => {
       tokenBucketInitialTokens: 50,
     };
 
-    setCachedConfig(mockConfig);
+    await setCachedConfig(mockConfig);
     const cached = getCachedConfig();
     assert.ok(cached);
     assert.equal(cached.proxyPort, 51200);
   });
 
-  it("can cache and retrieve admin token", () => {
-    setCachedAdminToken("test-token-value");
+  it("can cache and retrieve admin token", async () => {
+    await setCachedAdminToken("test-token-value");
     assert.equal(getCachedAdminToken(), "test-token-value");
   });
 
-  it("can cache and retrieve rotator state", () => {
+  it("can cache and retrieve rotator state", async () => {
     const mockState: PersistedState = {
       modelAccounts: { "gemini-2.5-pro": 0 },
       modelRequestCounts: { "gemini-2.5-pro": 3 },
@@ -113,14 +113,14 @@ describe("db-store helpers", () => {
       },
     };
 
-    setCachedState(mockState);
+    await setCachedState(mockState);
     const cached = getCachedState();
     assert.ok(cached);
     assert.equal(cached.modelAccounts["gemini-2.5-pro"], 0);
     assert.equal(cached.accounts["test@example.com"].totalRequests, 42);
   });
 
-  it("can cache and retrieve token usage", () => {
+  it("can cache and retrieve token usage", async () => {
     const mockUsage: TokenUsageTiered = {
       minutes: [
         {
@@ -136,14 +136,14 @@ describe("db-store helpers", () => {
       months: [],
     };
 
-    setCachedTokenUsage(mockUsage);
+    await setCachedTokenUsage(mockUsage);
     const cached = getCachedTokenUsage();
     assert.ok(cached);
     assert.equal(cached.minutes.length, 1);
     assert.equal(cached.minutes[0].inputTokens, 100);
   });
 
-  it("can cache and retrieve responses store", () => {
+  it("can cache and retrieve responses store", async () => {
     const mockStore: PersistedResponsesStore = {
       version: 1,
       entries: [
@@ -160,7 +160,7 @@ describe("db-store helpers", () => {
       ],
     };
 
-    setCachedResponsesStore(mockStore);
+    await setCachedResponsesStore(mockStore);
     const cached = getCachedResponsesStore();
     assert.ok(cached);
     assert.equal(cached.version, 1);

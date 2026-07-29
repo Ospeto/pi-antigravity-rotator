@@ -213,16 +213,16 @@ describe("v2 routing and status", () => {
     );
   });
 
-  it("accepts plus as a first-class account tier", () => {
+  it("accepts plus as a first-class account tier", async () => {
     const rotator = new AccountRotator(makeConfig());
     rotator.stopQuotaPolling();
-    const changed = rotator.setAccountTier("a@example.com", "plus");
+    const changed = await rotator.setAccountTier("a@example.com", "plus");
     assert.equal(changed, true);
     assert.equal(rotator.getConfig().accounts[0].tier, "plus");
     assert.equal(rotator.getStatus().accounts[0].tier, "plus");
   });
 
-  it("debounces model assignment state writes on the request path", () => {
+  it("debounces model assignment state writes on the request path", async () => {
     const rotator = new AccountRotator(makeConfig()) as any;
     rotator.stopQuotaPolling();
     rotator.modelState.set("gemini-3.1-pro", {
@@ -242,11 +242,11 @@ describe("v2 routing and status", () => {
     );
     assert.equal(saves, 0);
 
-    rotator.flushPendingStateSaveSync();
+    await rotator.flushPendingStateSave();
     assert.equal(saves, 1);
   });
 
-  it("debounces upstream-attempt state writes on the request path", () => {
+  it("debounces upstream-attempt state writes on the request path", async () => {
     const rotator = new AccountRotator(makeConfig()) as any;
     rotator.stopQuotaPolling();
     let saves = 0;
@@ -259,7 +259,7 @@ describe("v2 routing and status", () => {
     assert.equal(rotator.projectRequests.pa, 1);
     assert.equal(saves, 0);
 
-    rotator.flushPendingStateSaveSync();
+    await rotator.flushPendingStateSave();
     assert.equal(saves, 1);
   });
 

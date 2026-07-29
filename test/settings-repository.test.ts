@@ -12,21 +12,21 @@ describe("FileSettingsRepository", () => {
     await repo.close();
   });
 
-  it("get/set works as in-memory cache with disk persistence", () => {
+  it("get/set works as in-memory cache with disk persistence", async () => {
     const repo = new FileSettingsRepository();
     assert.equal(repo.get("nonexistent_key"), null);
 
-    repo.set("nonexistent_key", "value1");
+    await repo.set("nonexistent_key", "value1");
     assert.equal(repo.get("nonexistent_key"), "value1");
 
-    repo.set("nonexistent_key", "value2");
+    await repo.set("nonexistent_key", "value2");
     assert.equal(repo.get("nonexistent_key"), "value2");
   });
 
-  it("stores multiple keys independently", () => {
+  it("stores multiple keys independently", async () => {
     const repo = new FileSettingsRepository();
-    repo.set("key_a", "1");
-    repo.set("key_b", "2");
+    await repo.set("key_a", "1");
+    await repo.set("key_b", "2");
     assert.equal(repo.get("key_a"), "1");
     assert.equal(repo.get("key_b"), "2");
   });

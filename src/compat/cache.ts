@@ -28,10 +28,6 @@ export async function flushResponsesStore(): Promise<void> {
 	await responsesStore.flush();
 }
 
-export function flushResponsesStoreSync(): void {
-	responsesStore.flushSync();
-}
-
 export function cacheThoughtSignature(callId: string, signature: string): void {
 	if (thoughtSignatureCache.size >= THOUGHT_SIGNATURE_CACHE_MAX) {
 		// Evict the oldest entry

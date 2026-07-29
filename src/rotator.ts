@@ -133,7 +133,7 @@ export class AccountRotator {
   // scheduleStateSave() instead of saveState() to avoid blocking the event loop.
   private stateSaveTimer: ReturnType<typeof setTimeout> | null = null;
   private static readonly STATE_SAVE_DEBOUNCE_MS = 1_000;
-  private stateSaveInflight = false;
+  private stateSaveInflight: Promise<void> | null = null;
   private stateSavePending = false;
   // Debounced token-usage writer: same pattern as state. Debounce window is
   // longer (2s) because token-usage writes include the minute/hour/day
@@ -384,7 +384,7 @@ export class AccountRotator {
     }
   }
 
-  saveState(): void {
+  async saveState(): Promise<void> {
     const modelAccounts: Record<string, number> = {};
     const modelRequestCounts: Record<string, number> = {};
     for (const [model, state] of this.modelState.entries()) {
@@ -422,7 +422,7 @@ export class AccountRotator {
       };
     }
     try {
-      setCachedState(state);
+      await setCachedState(state);
     } catch (err) {
       this.log(`Failed to save state: ${err}`, "error");
     }
@@ -450,13 +450,15 @@ export class AccountRotator {
     if (this.stateSaveInflight) {
       // A write is already running. Re-schedule ourselves to run after it.
       this.stateSavePending = true;
+      await this.stateSaveInflight;
       return;
     }
-    this.stateSaveInflight = true;
+    const write = this.saveState();
+    this.stateSaveInflight = write;
     try {
-      this.saveState();
+      await write;
     } finally {
-      this.stateSaveInflight = false;
+      this.stateSaveInflight = null;
       if (this.stateSavePending) {
         this.stateSavePending = false;
         this.scheduleStateSave();
@@ -468,16 +470,14 @@ export class AccountRotator {
    * Force-flush any pending state writes. Called by SIGTERM/SIGINT handlers
    * in index.ts to minimise data loss on shutdown.
    */
-  flushPendingStateSaveSync(): void {
+  async flushPendingStateSave(): Promise<void> {
     if (this.stateSaveTimer) {
       clearTimeout(this.stateSaveTimer);
       this.stateSaveTimer = null;
     }
-    if (this.stateSaveInflight || this.stateSavePending) {
-      // Best effort — the in-flight write may not have hit disk yet.
-      // We do a final sync write to capture the most recent state.
-    }
-    this.saveState();
+    if (this.stateSaveInflight) await this.stateSaveInflight;
+    this.stateSavePending = false;
+    await this.saveState();
   }
 
   // =========================================================================
@@ -1521,7 +1521,7 @@ export class AccountRotator {
       this.log(
         `[${modelKey}] Rotated to ${best.config.label || best.config.email} [${timerType}] (quota: ${quota >= 0 ? quota + "%" : "unknown"})`,
       );
-      this.saveState();
+      await this.saveState();
       this.startRequest(best, modelKey);
       try {
         await this.ensureValidToken(best);
@@ -1597,7 +1597,7 @@ export class AccountRotator {
       this.log(
         `[default] Rotated to ${best.config.label || best.config.email}`,
       );
-      this.saveState();
+      await this.saveState();
       this.startRequest(best);
       try {
         await this.ensureValidToken(best);
@@ -1951,9 +1951,9 @@ export class AccountRotator {
     }
   }
 
-  private saveTokenUsage(): void {
+  private async saveTokenUsage(): Promise<void> {
     try {
-      setCachedTokenUsage(this.tokenBuckets);
+      await setCachedTokenUsage(this.tokenBuckets);
     } catch {
       /* best effort */
     }
@@ -1981,7 +1981,7 @@ export class AccountRotator {
     }
     this.tokenUsageSaveInflight = true;
     try {
-      this.saveTokenUsage();
+      await this.saveTokenUsage();
     } finally {
       this.tokenUsageSaveInflight = false;
       if (this.tokenUsageSavePending) {
@@ -1995,12 +1995,12 @@ export class AccountRotator {
    * Force-flush any pending token-usage write. Called by SIGTERM/SIGINT in
    * index.ts to minimise data loss on shutdown.
    */
-  flushPendingTokenUsageSaveSync(): void {
+  async flushPendingTokenUsageSave(): Promise<void> {
     if (this.tokenUsageSaveTimer) {
       clearTimeout(this.tokenUsageSaveTimer);
       this.tokenUsageSaveTimer = null;
     }
-    this.saveTokenUsage();
+    await this.saveTokenUsage();
   }
 
   getTokenUsage(): TokenUsageData {
@@ -2175,7 +2175,7 @@ export class AccountRotator {
         "warn",
       );
     }
-    this.saveState();
+    void this.saveState();
   }
 
   recordUpstreamAttempt(account: AccountRuntime): void {
@@ -2219,7 +2219,7 @@ export class AccountRotator {
     this.scheduleStateSave();
   }
 
-  enableAccount(email: string): boolean {
+  async enableAccount(email: string): Promise<boolean> {
     const account = this.accounts.find((a) => a.config.email === email);
     if (!account) return false;
     if (account.flagged) {
@@ -2234,47 +2234,50 @@ export class AccountRotator {
     account.consecutiveErrors = 0;
     account.lastError = null;
     account.cooldownsByModel = {};
-    this.saveState();
+    await this.saveState();
     this.log(`${email}: re-enabled`);
     return true;
   }
 
-  disableAccount(email: string): boolean {
+  async disableAccount(email: string): Promise<boolean> {
     const account = this.accounts.find((a) => a.config.email === email);
     if (!account) return false;
     account.disabled = true;
     account.lastError = "Disabled by operator";
-    this.saveState();
+    await this.saveState();
     this.log(`${email}: disabled by operator`, "warn");
     return true;
   }
 
-  quarantineAccount(
+  async quarantineAccount(
     email: string,
     reason = "Quarantined by operator",
-  ): boolean {
+  ): Promise<boolean> {
     const account = this.accounts.find((a) => a.config.email === email);
     if (!account) return false;
     account.flagged = true;
     account.lastError = reason;
-    this.saveState();
+    await this.saveState();
     this.log(`${email}: quarantined by operator`, "warn");
     return true;
   }
 
-  restoreAccount(email: string): boolean {
+  async restoreAccount(email: string): Promise<boolean> {
     const account = this.accounts.find((a) => a.config.email === email);
     if (!account) return false;
     account.disabled = false;
     account.flagged = false;
     account.consecutiveErrors = 0;
     account.lastError = null;
-    this.saveState();
+    await this.saveState();
     this.log(`${email}: restored by operator`, "warn");
     return true;
   }
 
-  updateAccountMetadata(email: string, patch: Partial<AccountConfig>): boolean {
+  async updateAccountMetadata(
+    email: string,
+    patch: Partial<AccountConfig>,
+  ): Promise<boolean> {
     const account = this.accounts.find((a) => a.config.email === email);
     if (!account) return false;
     account.config = { ...account.config, ...patch };
@@ -2282,16 +2285,16 @@ export class AccountRotator {
       (entry) => entry.email === email,
     );
     if (existing) Object.assign(existing, patch);
-    saveAccountsConfig(this.config);
-    this.saveState();
+    await saveAccountsConfig(this.config);
+    await this.saveState();
     this.log(`${email}: metadata updated by operator`, "warn");
     return true;
   }
 
-  setAllowFreshWindowStarts(enabled: boolean): boolean {
+  async setAllowFreshWindowStarts(enabled: boolean): Promise<boolean> {
     if (this.allowFreshWindowStarts === enabled) return false;
     this.allowFreshWindowStarts = enabled;
-    this.saveState();
+    await this.saveState();
     this.log(
       enabled
         ? "Operator enabled fresh window starts; the rotator may seed new timer windows again"
@@ -2301,15 +2304,15 @@ export class AccountRotator {
     return true;
   }
 
-  setAccountAllowFreshWindowStartsOverride(
+  async setAccountAllowFreshWindowStartsOverride(
     email: string,
     enabled: boolean,
-  ): boolean {
+  ): Promise<boolean> {
     const account = this.accounts.find((a) => a.config.email === email);
     if (!account) return false;
     if (account.allowFreshWindowStartsOverride === enabled) return true;
     account.allowFreshWindowStartsOverride = enabled;
-    this.saveState();
+    await this.saveState();
     this.log(
       enabled
         ? `${email}: operator override enabled fresh window starts for this account`
@@ -2319,10 +2322,10 @@ export class AccountRotator {
     return true;
   }
 
-  setAutoWarmup(enabled: boolean): boolean {
+  async setAutoWarmup(enabled: boolean): Promise<boolean> {
     if (this.autoWarmupEnabled === enabled) return false;
     this.autoWarmupEnabled = enabled;
-    this.saveState();
+    await this.saveState();
     this.log(
       enabled
         ? "Operator enabled auto-warmup; accounts with fresh-window override will automatically receive minimal kickstart requests on each quota poll"
@@ -2332,7 +2335,7 @@ export class AccountRotator {
     return true;
   }
 
-  clearModelBreaker(modelKey: string): boolean {
+  async clearModelBreaker(modelKey: string): Promise<boolean> {
     const now = Date.now();
     const hasModelBreaker = (this.modelBreakers[modelKey] ?? 0) > now;
     const hadAny = hasModelBreaker;
@@ -2347,19 +2350,19 @@ export class AccountRotator {
     this.provider429Events = this.provider429Events.filter(
       (e) => e.modelKey !== modelKey,
     );
-    this.saveState();
+    await this.saveState();
     this.log(`[${modelKey}] Operator manually cleared circuit breaker`, "warn");
     return hadAny;
   }
 
-  clearAllBreakers(): number {
+  async clearAllBreakers(): Promise<number> {
     const count =
       Object.keys(this.modelBreakers).length +
       Object.keys(this.projectModelBreakers).length;
     this.modelBreakers = {};
     this.projectModelBreakers = {};
     this.provider429Events = [];
-    this.saveState();
+    await this.saveState();
     this.log(
       `Operator cleared all circuit breakers (${count} entries)`,
       "warn",
@@ -2725,7 +2728,7 @@ export class AccountRotator {
     return applyConfigDefaults(structuredClone(this.config));
   }
 
-  replaceConfig(nextConfig: Config): void {
+  async replaceConfig(nextConfig: Config): Promise<void> {
     const normalized = applyConfigDefaults(nextConfig);
     const previous = new Map(
       this.accounts.map((account) => [account.config.email, account]),
@@ -2772,8 +2775,8 @@ export class AccountRotator {
         },
       };
     });
-    saveAccountsConfig(this.config);
-    this.saveState();
+    await saveAccountsConfig(this.config);
+    await this.saveState();
     this.refreshHealthScores();
   }
 
@@ -2824,7 +2827,7 @@ export class AccountRotator {
     };
   }
 
-  addOrUpdateAccount(accountConfig: AccountConfig): void {
+  async addOrUpdateAccount(accountConfig: AccountConfig): Promise<void> {
     const existingIndex = this.accounts.findIndex(
       (account) => account.config.email === accountConfig.email,
     );
@@ -2881,12 +2884,12 @@ export class AccountRotator {
       this.log(`${accountConfig.email}: account added via hosted login`);
     }
 
-    saveAccountsConfig(this.config);
-    this.saveState();
+    await saveAccountsConfig(this.config);
+    await this.saveState();
     void this.pollAllQuotas();
   }
 
-  removeAccount(email: string): boolean {
+  async removeAccount(email: string): Promise<boolean> {
     const idx = this.accounts.findIndex((a) => a.config.email === email);
     if (idx < 0) return false;
     const account = this.accounts[idx];
@@ -2921,13 +2924,13 @@ export class AccountRotator {
       this.defaultIndex = this.accounts.length - 1;
     }
 
-    removeAccountFromConfig(email);
-    this.saveState();
+    await removeAccountFromConfig(email);
+    await this.saveState();
     this.log(`${email}: account removed`);
     return true;
   }
 
-  setAccountTier(email: string, tier: string): boolean {
+  async setAccountTier(email: string, tier: string): Promise<boolean> {
     const validTiers = ["unknown", "free", "plus", "pro", "ultra"];
     if (!validTiers.includes(tier)) return false;
     const account = this.accounts.find((a) => a.config.email === email);
@@ -2935,8 +2938,8 @@ export class AccountRotator {
     account.config.tier = tier as AccountTier;
     const configAccount = this.config.accounts.find((a) => a.email === email);
     if (configAccount) configAccount.tier = tier as AccountTier;
-    saveAccountsConfig(this.config);
-    this.saveState();
+    await saveAccountsConfig(this.config);
+    await this.saveState();
     this.log(`${email}: tier changed to ${tier}`);
     return true;
   }

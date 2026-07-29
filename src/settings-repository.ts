@@ -5,7 +5,7 @@
 //   FileSettingsRepository     — backed by JSON files on disk
 
 import pg from "pg";
-import { existsSync, readFileSync, chmodSync } from "node:fs";
+import { chmod } from "node:fs/promises";
 import { join } from "node:path";
 import { getConfigDir } from "./paths.js";
 import {
@@ -32,7 +32,7 @@ export interface ISettingsRepository {
   get(key: string): string | null;
 
   /** Persist a value by key */
-  set(key: string, value: string): void;
+  set(key: string, value: string): Promise<void>;
 
   /** Close connections / flush pending writes */
   close(): Promise<void>;
@@ -122,8 +122,7 @@ export class PostgresSettingsRepository implements ISettingsRepository {
       if (this.cache.has(key)) continue;
       try {
         const path = join(getConfigDir(), spec.filename);
-        if (!existsSync(path)) continue;
-        const content = readFileSync(path, "utf-8");
+        const content = await readTextFile(path);
         if (!content) continue;
         const value = spec.trim ? content.trim() : content;
         if (!value) continue;
@@ -163,7 +162,7 @@ export class PostgresSettingsRepository implements ISettingsRepository {
     return this.cache.get(key) ?? null;
   }
 
-  set(key: string, value: string): void {
+  async set(key: string, value: string): Promise<void> {
     this.cache.set(key, value);
     if (this.pool) {
       // Non-blocking background save
@@ -271,8 +270,7 @@ export class FileSettingsRepository implements ISettingsRepository {
     for (const [key, spec] of Object.entries(DISK_FILES)) {
       try {
         const path = join(getConfigDir(), spec.filename);
-        if (!existsSync(path)) continue;
-        const content = readTextFile(path);
+        const content = await readTextFile(path);
         if (!content) continue;
         this.cache.set(key, spec.trim ? content.trim() : content);
       } catch {
@@ -285,7 +283,7 @@ export class FileSettingsRepository implements ISettingsRepository {
     return this.cache.get(key) ?? null;
   }
 
-  set(key: string, value: string): void {
+  async set(key: string, value: string): Promise<void> {
     this.cache.set(key, value);
 
     // Persist to disk
@@ -295,24 +293,24 @@ export class FileSettingsRepository implements ISettingsRepository {
     const spec = DISK_FILES[key];
     try {
       if (spec?.backup) {
-        backupFile(path, spec.filename.replace(".json", ""));
+        await backupFile(path, spec.filename.replace(".json", ""));
       }
       if (spec?.trim) {
         // Plain text file (e.g. admin_token)
-        writeTextFileAtomic(path, value);
+        await writeTextFileAtomic(path, value);
       } else {
         // JSON files — try to pretty-print, fall back to raw string
         try {
           const parsed = JSON.parse(value);
-          writeJsonFileAtomic(path, parsed);
+          await writeJsonFileAtomic(path, parsed);
         } catch {
-          writeTextFileAtomic(path, value);
+          await writeTextFileAtomic(path, value);
         }
       }
       // Apply restricted permissions when specified (e.g. secrets)
       if (spec?.mode) {
         try {
-          chmodSync(path, spec.mode);
+          await chmod(path, spec.mode);
         } catch {
           // Best effort: some filesystems (e.g. Windows) don't support POSIX perms.
         }
@@ -323,6 +321,6 @@ export class FileSettingsRepository implements ISettingsRepository {
   }
 
   async close(): Promise<void> {
-    // no-op — all writes are synchronous
+    // no-op — callers await each write before closing
   }
 }

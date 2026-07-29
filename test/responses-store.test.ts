@@ -93,7 +93,7 @@ describe("ResponsesStore", () => {
   it("load prunes expired entries from repository", async () => {
     const expiredId = "expired-on-repo";
     const freshId = "fresh-on-repo";
-    setCachedResponsesStore({
+    await setCachedResponsesStore({
       version: 1,
       entries: [
         makeEntry(expiredId, Date.now() - 1),
@@ -115,23 +115,23 @@ describe("ResponsesStore", () => {
   });
 });
 
-describe("ResponsesStore.flushSync", () => {
+describe("ResponsesStore.flush", () => {
   before(async () => {
     await initDb();
   });
 
-  it("writes to repository synchronously when dirty", () => {
+  it("writes to repository asynchronously when dirty", async () => {
     const store = new ResponsesStore();
     store.set("sync-1", makeEntry("sync-1", Date.now() + 60_000)[1]);
-    store.flushSync();
+    await store.flush();
     const cached = getCachedResponsesStore();
     assert.ok(cached);
     assert.ok(cached.entries.find((e: [string, unknown]) => e[0] === "sync-1"));
   });
 
-  it("no-op when not dirty", () => {
+  it("no-op when not dirty", async () => {
     const store = new ResponsesStore();
-    // flushSync on a clean store should not crash
-    store.flushSync();
+    // flush on a clean store should not crash
+    await store.flush();
   });
 });

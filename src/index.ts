@@ -1,6 +1,5 @@
 // Entry point - loads config and starts the proxy
 
-import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Config } from "./types.js";
 import { AccountRotator } from "./rotator.js";
@@ -18,10 +17,10 @@ import { warnIfInsecureTelemetryEndpoint } from "./telemetry.js";
 import {
   setModelSpecsOverride,
   loadResponsesStore,
-  flushResponsesStoreSync,
+  flushResponsesStore,
 } from "./compat.js";
 import { setModelAliasesOverride } from "./types.js";
-import { writeTextFileAtomic } from "./storage.js";
+import { readTextFile, writeTextFileAtomic } from "./storage.js";
 import { initDb } from "./db-store.js";
 import { runKeyMigrations } from "./key-migrations.js";
 import { flushSpendLogs, stopRetentionCleanup, startRetentionCleanup } from "./spend-logger.js";
@@ -53,30 +52,35 @@ const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
  * Creates .first-boot on first run, shows prompt once after 24h,
  * then writes .star-prompted so it never appears again.
  */
-function maybeShowStarNudge(): void {
+async function maybeShowStarNudge(): Promise<void> {
   const dir = getConfigDir();
   const promptedPath = join(dir, ".star-prompted");
-  if (existsSync(promptedPath)) return; // already shown, done forever
+  try {
+    if ((await readTextFile(promptedPath)) !== null) return;
+  } catch {
+    return;
+  }
 
   const firstBootPath = join(dir, ".first-boot");
   let firstBootMs: number;
 
-  if (existsSync(firstBootPath)) {
-    try {
-      firstBootMs = parseInt(readFileSync(firstBootPath, "utf-8").trim(), 10);
+  try {
+    const firstBoot = await readTextFile(firstBootPath);
+    if (firstBoot !== null) {
+      firstBootMs = parseInt(firstBoot.trim(), 10);
       if (Number.isNaN(firstBootMs)) return;
-    } catch {
-      return;
+    } else {
+      // First ever boot — record timestamp
+      firstBootMs = Date.now();
+      try {
+        await writeTextFileAtomic(firstBootPath, String(firstBootMs));
+      } catch {
+        /* best effort */
+      }
+      return; // too early, come back after 24h
     }
-  } else {
-    // First ever boot — record timestamp
-    firstBootMs = Date.now();
-    try {
-      writeTextFileAtomic(firstBootPath, String(firstBootMs));
-    } catch {
-      /* best effort */
-    }
-    return; // too early, come back after 24h
+  } catch {
+    return;
   }
 
   if (Date.now() - firstBootMs < TWENTY_FOUR_HOURS_MS) return; // not yet
@@ -90,7 +94,7 @@ function maybeShowStarNudge(): void {
   console.log();
 
   try {
-    writeTextFileAtomic(promptedPath, String(Date.now()));
+    await writeTextFileAtomic(promptedPath, String(Date.now()));
   } catch {
     /* best effort */
   }
@@ -102,8 +106,8 @@ function maybeShowStarNudge(): void {
  * saved to the repository, and printed to the operator once. This ensures
  * admin routes are protected by default on first run.
  */
-function bootstrapAdminToken(): void {
-  const resolved = ensureAdminToken();
+async function bootstrapAdminToken(): Promise<void> {
+  const resolved = await ensureAdminToken();
   setPersistedAdminToken(resolved.token);
   if (resolved.source === "generated") {
     console.log();
@@ -193,8 +197,8 @@ export async function main(): Promise<void> {
   }
   console.log();
 
-  maybeShowStarNudge();
-  bootstrapAdminToken();
+  await maybeShowStarNudge();
+  await bootstrapAdminToken();
   maybeWarnAboutAdminExposure(config);
   maybeWarnAboutProxyExposure(config);
   warnIfUsingFallbackOAuthCreds();
@@ -234,9 +238,9 @@ export async function main(): Promise<void> {
     console.log("\nShutting down...");
     stopRetentionCleanup();
     await flushSpendLogs();
-    flushResponsesStoreSync();
-    rotator.flushPendingStateSaveSync();
-    rotator.flushPendingTokenUsageSaveSync();
+    await flushResponsesStore();
+    await rotator.flushPendingStateSave();
+    await rotator.flushPendingTokenUsageSave();
     await telemetry.shutdown();
     rotator.stopQuotaPolling();
     stopPendingSessionReaper();

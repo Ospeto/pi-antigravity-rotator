@@ -6,8 +6,8 @@
 // not break active Codex sessions.
 //
 // Writes are debounced to avoid excessive persistence calls under load.
-// The store is also flushed synchronously on SIGTERM (see index.ts) to
-// minimise data loss.
+// The store is flushed asynchronously during graceful shutdown (see index.ts)
+// to minimise data loss without blocking the event loop.
 
 import {
   getCachedResponsesStore,
@@ -141,7 +141,7 @@ export class ResponsesStore {
           version: 1,
           entries: Array.from(this.cache.entries()),
         };
-        setCachedResponsesStore(data);
+        await setCachedResponsesStore(data);
         this.dirty = false;
       } catch {
         // Best effort — will retry on next schedule.
@@ -156,20 +156,4 @@ export class ResponsesStore {
     return this.flushing;
   }
 
-  /**
-   * Synchronous flush for use in shutdown handlers.
-   */
-  flushSync(): void {
-    if (!this.dirty) return;
-    try {
-      const data: PersistedResponsesStore = {
-        version: 1,
-        entries: Array.from(this.cache.entries()),
-      };
-      setCachedResponsesStore(data);
-      this.dirty = false;
-    } catch {
-      // Best effort
-    }
-  }
 }

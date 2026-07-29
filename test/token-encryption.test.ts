@@ -125,7 +125,7 @@ describe("token encryption", () => {
       ],
     };
 
-    setCachedConfig(config);
+    await setCachedConfig(config);
 
     // In memory, getCachedConfig returns the plain refresh token for usage
     const loaded = getCachedConfig();

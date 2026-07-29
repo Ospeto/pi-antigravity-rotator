@@ -21,27 +21,27 @@ describe("serveRemoveAccountApi", () => {
 		removeAccount: (email: string) => email === "exists@test.com",
 	};
 
-	it("returns 200 with { ok: true } when rotator.removeAccount succeeds", () => {
+	it("returns 200 with { ok: true } when rotator.removeAccount succeeds", async () => {
 		const { res, state } = mockRes();
-		serveRemoveAccountApi(res, mockRotator as any, "exists@test.com");
+		await serveRemoveAccountApi(res, mockRotator as any, "exists@test.com");
 		assert.equal(state.statusCode, 200);
 		const parsed = JSON.parse(state.body);
 		assert.equal(parsed.ok, true);
 		assert.equal(parsed.email, "exists@test.com");
 	});
 
-	it("returns 400 with { ok: false } when rotator.removeAccount fails", () => {
+	it("returns 400 with { ok: false } when rotator.removeAccount fails", async () => {
 		const { res, state } = mockRes();
-		serveRemoveAccountApi(res, mockRotator as any, "noexist@test.com");
+		await serveRemoveAccountApi(res, mockRotator as any, "noexist@test.com");
 		assert.equal(state.statusCode, 400);
 		const parsed = JSON.parse(state.body);
 		assert.equal(parsed.ok, false);
 		assert.equal(parsed.email, "noexist@test.com");
 	});
 
-	it("sets Content-Type to application/json", () => {
+	it("sets Content-Type to application/json", async () => {
 		const { res, state } = mockRes();
-		serveRemoveAccountApi(res, mockRotator as any, "exists@test.com");
+		await serveRemoveAccountApi(res, mockRotator as any, "exists@test.com");
 		assert.equal(state.headers["Content-Type"], "application/json");
 	});
 });

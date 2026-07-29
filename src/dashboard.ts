@@ -120,98 +120,98 @@ export function serveConfigExportApi(
   res.end(JSON.stringify(rotator.getConfig(), null, 2));
 }
 
-export function serveConfigImportApi(
+export async function serveConfigImportApi(
   res: ServerResponse,
   rotator: AccountRotator,
   config: Config,
-): void {
-  rotator.replaceConfig(config);
+): Promise<void> {
+  await rotator.replaceConfig(config);
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(
     JSON.stringify({ ok: true, importedAccounts: config.accounts.length }),
   );
 }
 
-export function serveEnableApi(
+export async function serveEnableApi(
   res: ServerResponse,
   rotator: AccountRotator,
   email: string,
-): void {
-  const ok = rotator.enableAccount(email);
+): Promise<void> {
+  const ok = await rotator.enableAccount(email);
   res.writeHead(ok ? 200 : 409, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ ok, email }));
 }
 
-export function serveDisableApi(
+export async function serveDisableApi(
   res: ServerResponse,
   rotator: AccountRotator,
   email: string,
-): void {
-  const ok = rotator.disableAccount(email);
+): Promise<void> {
+  const ok = await rotator.disableAccount(email);
   res.writeHead(ok ? 200 : 404, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ ok, email }));
 }
 
-export function serveQuarantineApi(
+export async function serveQuarantineApi(
   res: ServerResponse,
   rotator: AccountRotator,
   email: string,
-): void {
-  const ok = rotator.quarantineAccount(email);
+): Promise<void> {
+  const ok = await rotator.quarantineAccount(email);
   res.writeHead(ok ? 200 : 404, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ ok, email }));
 }
 
-export function serveRestoreApi(
+export async function serveRestoreApi(
   res: ServerResponse,
   rotator: AccountRotator,
   email: string,
-): void {
-  const ok = rotator.restoreAccount(email);
+): Promise<void> {
+  const ok = await rotator.restoreAccount(email);
   res.writeHead(ok ? 200 : 404, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ ok, email }));
 }
 
-export function serveRemoveAccountApi(
+export async function serveRemoveAccountApi(
   res: ServerResponse,
   rotator: AccountRotator,
   email: string,
-): void {
-  const ok = rotator.removeAccount(email);
+): Promise<void> {
+  const ok = await rotator.removeAccount(email);
   res.writeHead(ok ? 200 : 400, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ ok, email }));
 }
 
-export function serveSetTierApi(
+export async function serveSetTierApi(
   res: ServerResponse,
   rotator: AccountRotator,
   email: string,
   tier: string,
-): void {
-  const ok = rotator.setAccountTier(email, tier);
+): Promise<void> {
+  const ok = await rotator.setAccountTier(email, tier);
   res.writeHead(ok ? 200 : 400, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ ok, email, tier }));
 }
 
-export function serveFreshWindowStartsApi(
+export async function serveFreshWindowStartsApi(
   res: ServerResponse,
   rotator: AccountRotator,
   enabled: boolean,
-): void {
-  const changed = rotator.setAllowFreshWindowStarts(enabled);
+): Promise<void> {
+  const changed = await rotator.setAllowFreshWindowStarts(enabled);
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(
     JSON.stringify({ ok: true, changed, allowFreshWindowStarts: enabled }),
   );
 }
 
-export function serveAccountFreshWindowStartsApi(
+export async function serveAccountFreshWindowStartsApi(
   res: ServerResponse,
   rotator: AccountRotator,
   email: string,
   enabled: boolean,
-): void {
-  const ok = rotator.setAccountAllowFreshWindowStartsOverride(email, enabled);
+): Promise<void> {
+  const ok = await rotator.setAccountAllowFreshWindowStartsOverride(email, enabled);
   res.writeHead(ok ? 200 : 404, { "Content-Type": "application/json" });
   res.end(
     JSON.stringify({ ok, email, allowFreshWindowStartsOverride: enabled }),
@@ -229,15 +229,15 @@ export function serveClearInFlightApi(
   res.end(JSON.stringify({ ok, email, modelKey }));
 }
 
-export function serveClearBreakerApi(
+export async function serveClearBreakerApi(
   res: ServerResponse,
   rotator: AccountRotator,
   modelKey?: string,
-): void {
+): Promise<void> {
   if (modelKey) {
-    rotator.clearModelBreaker(modelKey);
+    await rotator.clearModelBreaker(modelKey);
   } else {
-    rotator.clearAllBreakers();
+    await rotator.clearAllBreakers();
   }
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ ok: true }));
@@ -268,12 +268,12 @@ export function serveKickstartApi(
   }
 }
 
-export function serveAutoWarmupApi(
+export async function serveAutoWarmupApi(
   res: ServerResponse,
   rotator: AccountRotator,
   enabled: boolean,
-): void {
-  const changed = rotator.setAutoWarmup(enabled);
+): Promise<void> {
+  const changed = await rotator.setAutoWarmup(enabled);
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ ok: true, changed, autoWarmupEnabled: enabled }));
 }

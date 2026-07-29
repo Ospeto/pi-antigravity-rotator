@@ -441,8 +441,8 @@ export async function handleCliLoginApi(
       label,
     };
 
-    const { isNew } = addAccountToConfig(entry);
-    rotator.addOrUpdateAccount(entry);
+    const { isNew } = await addAccountToConfig(entry);
+    await rotator.addOrUpdateAccount(entry);
 
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(
@@ -523,8 +523,8 @@ export async function handleHostedCallback(
       label,
     };
 
-    const { isNew } = addAccountToConfig(entry);
-    rotator.addOrUpdateAccount(entry);
+    const { isNew } = await addAccountToConfig(entry);
+    await rotator.addOrUpdateAccount(entry);
 
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(

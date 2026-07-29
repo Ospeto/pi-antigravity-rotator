@@ -75,7 +75,7 @@ export async function runDoctor(
     warnings.push("Token usage data is corrupted.");
   }
 
-  const backups = dbConfigured ? [] : listBackups();
+  const backups = dbConfigured ? [] : await listBackups();
 
   return {
     ok: errors.length === 0,

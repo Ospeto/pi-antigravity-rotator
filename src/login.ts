@@ -91,12 +91,12 @@ export async function runLogin(): Promise<void> {
 	};
 
 	console.log();
-	const { isNew } = addAccountToConfig(entry);
+	const { isNew } = await addAccountToConfig(entry);
 	console.log(`  ${isNew ? "Added" : "Updated"} ${entry.email} in ${ACCOUNTS_FILE}`);
 	console.log(`  projectId=${project.projectId} (source=${project.source})`);
 
-	ensurePiModelsConfig();
-	ensurePiAuthConfig();
+	await ensurePiModelsConfig();
+	await ensurePiAuthConfig();
 
 	const config = loadOrCreateAccountsConfig();
 	console.log();

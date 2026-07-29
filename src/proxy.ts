@@ -1599,9 +1599,10 @@ export function startProxy(
 
   // Hook into rotator state changes to trigger SSE
   const origSaveState = rotator.saveState.bind(rotator);
-  rotator.saveState = (): void => {
-    origSaveState();
+  rotator.saveState = (): Promise<void> => {
+    const write = origSaveState();
     scheduleSseBroadcast();
+    return write;
   };
 
   const server = createServer((req, res) => {
@@ -1734,10 +1735,10 @@ export function startProxy(
             res.end(JSON.stringify({ ok: false, errors: validation.errors }));
             return;
           }
-          serveConfigImportApi(
-            res,
-            rotator,
-            applyConfigDefaults(validation.value),
+           return serveConfigImportApi(
+             res,
+             rotator,
+             applyConfigDefaults(validation.value),
           );
         })
         .catch((err) => {
@@ -1772,28 +1773,28 @@ export function startProxy(
     if (method === "POST" && pathname.startsWith("/api/enable/")) {
       if (!requireAdmin(req, res)) return;
       const email = decodeURIComponent(pathname.slice("/api/enable/".length));
-      serveEnableApi(res, rotator, email);
+      void serveEnableApi(res, rotator, email);
       return;
     }
 
     if (method === "POST" && pathname.startsWith("/api/disable/")) {
       if (!requireAdmin(req, res)) return;
       const email = decodeURIComponent(pathname.slice("/api/disable/".length));
-      serveDisableApi(res, rotator, email);
+      void serveDisableApi(res, rotator, email);
       return;
     }
 
     if (method === "POST" && pathname.startsWith("/api/quarantine/")) {
       if (!requireAdmin(req, res)) return;
       const email = decodeURIComponent(pathname.slice("/api/quarantine/".length));
-      serveQuarantineApi(res, rotator, email);
+      void serveQuarantineApi(res, rotator, email);
       return;
     }
 
     if (method === "POST" && pathname.startsWith("/api/restore/")) {
       if (!requireAdmin(req, res)) return;
       const email = decodeURIComponent(pathname.slice("/api/restore/".length));
-      serveRestoreApi(res, rotator, email);
+      void serveRestoreApi(res, rotator, email);
       return;
     }
 
@@ -1802,7 +1803,7 @@ export function startProxy(
       const email = decodeURIComponent(
         pathname.slice("/api/remove-account/".length),
       );
-      serveRemoveAccountApi(res, rotator, email);
+      void serveRemoveAccountApi(res, rotator, email);
       return;
     }
 
@@ -1822,7 +1823,7 @@ export function startProxy(
       }
       const email = decodeURIComponent(rest.slice(0, lastSlash));
       const tier = decodeURIComponent(rest.slice(lastSlash + 1));
-      serveSetTierApi(res, rotator, email, tier);
+      void serveSetTierApi(res, rotator, email, tier);
       return;
     }
 
@@ -1846,7 +1847,7 @@ export function startProxy(
       const rest = pathname.slice("/api/clear-breaker/".length);
       const modelKey =
         rest && rest !== "all" ? decodeURIComponent(rest) : undefined;
-      serveClearBreakerApi(res, rotator, modelKey);
+      void serveClearBreakerApi(res, rotator, modelKey);
       return;
     }
 
@@ -1857,7 +1858,7 @@ export function startProxy(
     ) {
       if (!requireAdmin(req, res)) return;
       trackFeature("freshWindowToggle");
-      serveFreshWindowStartsApi(res, rotator, pathname.endsWith("/on"));
+      void serveFreshWindowStartsApi(res, rotator, pathname.endsWith("/on"));
       return;
     }
 
@@ -1871,7 +1872,7 @@ export function startProxy(
       const lastSlash = rest.lastIndexOf("/");
       const email = decodeURIComponent(rest.slice(0, lastSlash));
       const enabled = rest.slice(lastSlash + 1) === "on";
-      serveAccountFreshWindowStartsApi(res, rotator, email, enabled);
+      void serveAccountFreshWindowStartsApi(res, rotator, email, enabled);
       return;
     }
 
@@ -1898,7 +1899,7 @@ export function startProxy(
         pathname === "/api/settings/auto-warmup/off")
     ) {
       if (!requireAdmin(req, res)) return;
-      serveAutoWarmupApi(res, rotator, pathname.endsWith("/on"));
+      void serveAutoWarmupApi(res, rotator, pathname.endsWith("/on"));
       return;
     }
 

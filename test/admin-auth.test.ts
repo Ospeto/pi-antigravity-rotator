@@ -92,10 +92,10 @@ describe("admin token generation and persistence", () => {
     await initDb();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     setPersistedAdminToken(null);
     // Clear repository state for admin_token between tests
-    writePersistedAdminToken("");
+    await writePersistedAdminToken("");
   });
 
   it("generateAdminToken returns 64 hex chars (256 bits)", () => {
@@ -110,14 +110,14 @@ describe("admin token generation and persistence", () => {
     assert.notEqual(a, b);
   });
 
-  it("writePersistedAdminToken persists to the repository", () => {
-    writePersistedAdminToken("abc123");
+  it("writePersistedAdminToken persists to the repository", async () => {
+    await writePersistedAdminToken("abc123");
     const cached = getCachedAdminToken();
     assert.equal(cached, "abc123");
   });
 
-  it("readPersistedAdminToken reads from the repository", () => {
-    writePersistedAdminToken("my-secret-token");
+  it("readPersistedAdminToken reads from the repository", async () => {
+    await writePersistedAdminToken("my-secret-token");
     assert.equal(readPersistedAdminToken(), "my-secret-token");
   });
 
@@ -126,23 +126,23 @@ describe("admin token generation and persistence", () => {
     assert.equal(readPersistedAdminToken(), null);
   });
 
-  it("ensureAdminToken returns env var when present", () => {
-    const result = ensureAdminToken({ PI_ROTATOR_ADMIN_TOKEN: "envtok" });
+  it("ensureAdminToken returns env var when present", async () => {
+    const result = await ensureAdminToken({ PI_ROTATOR_ADMIN_TOKEN: "envtok" });
     assert.equal(result.source, "env");
     assert.equal(result.token, "envtok");
     assert.equal(result.generated, false);
   });
 
-  it("ensureAdminToken reads from repository when env is absent", () => {
-    writePersistedAdminToken("repotok");
-    const result = ensureAdminToken({});
+  it("ensureAdminToken reads from repository when env is absent", async () => {
+    await writePersistedAdminToken("repotok");
+    const result = await ensureAdminToken({});
     assert.equal(result.source, "repository");
     assert.equal(result.token, "repotok");
     assert.equal(result.generated, false);
   });
 
-  it("ensureAdminToken generates and persists a new token when neither is present", () => {
-    const result = ensureAdminToken({});
+  it("ensureAdminToken generates and persists a new token when neither is present", async () => {
+    const result = await ensureAdminToken({});
     assert.equal(result.source, "generated");
     assert.equal(result.generated, true);
     assert.equal(result.token.length, 64);
@@ -150,17 +150,17 @@ describe("admin token generation and persistence", () => {
     assert.equal(readPersistedAdminToken(), result.token);
   });
 
-  it("ensureAdminToken is idempotent: second call returns same repository token", () => {
-    const first = ensureAdminToken({});
+  it("ensureAdminToken is idempotent: second call returns same repository token", async () => {
+    const first = await ensureAdminToken({});
     setPersistedAdminToken(null); // clear runtime cache so it goes to repository
-    const second = ensureAdminToken({});
+    const second = await ensureAdminToken({});
     assert.equal(second.source, "repository");
     assert.equal(second.token, first.token);
     assert.equal(second.generated, false);
   });
 
-  it("requireAdmin now blocks requests when only a persisted token is set", () => {
-    const resolved = ensureAdminToken({});
+  it("requireAdmin now blocks requests when only a persisted token is set", async () => {
+    const resolved = await ensureAdminToken({});
     setPersistedAdminToken(resolved.token);
     assert.equal(isAdminAuthorized(req("/api/status")), false);
     assert.equal(

@@ -45,7 +45,6 @@ import {
   resetResponsesStoreForTests,
   loadResponsesStore,
   flushResponsesStore,
-  flushResponsesStoreSync,
   cacheThoughtSignature,
 } from "./compat/cache.js";
 import {
@@ -86,7 +85,6 @@ export {
   resetResponsesStoreForTests,
   loadResponsesStore,
   flushResponsesStore,
-  flushResponsesStoreSync,
   normalizeOpenAIChatCompletionRequest,
   normalizeOpenAIResponsesRequest,
   normalizeAnthropicMessagesRequest,
