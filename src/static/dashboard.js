@@ -335,10 +335,6 @@ function renderAccounts(data) {
         })
         .join("");
       var tierLabel = a.tier ? String(a.tier).toUpperCase() : "UNKNOWN";
-      var healthPct = Math.round((a.healthScore || 0) * 100);
-      var healthColor = healthPct >= 80 ? "var(--green)" : healthPct >= 50 ? "var(--yellow)" : "var(--red)";
-      var healthBadgeClass = healthPct >= 80 ? "badge-health-good" : healthPct >= 50 ? "badge-health-warning" : "badge-health-critical";
-      var healthBadge = '<span class="badge ' + healthBadgeClass + '" title="Account Health Score: ' + healthPct + '%">' + healthPct + '% HEALTH</span>';
 
       return (
         '<div class="account-card ' +
@@ -357,7 +353,6 @@ function renderAccounts(data) {
         '">' +
         escapeHtml(a.status) +
         "</span>" +
-        healthBadge +
         '<div style="position:relative;display:inline-block">' +
         '<span class="badge badge-model" onclick="toggleTierDropdown(this, \'' +
         jsString(a.email) +
@@ -418,21 +413,9 @@ function renderAccounts(data) {
         '">' +
         (a.hasValidToken ? "Valid" : "Expired") +
         "</div></div>" +
-        '<div class="card-stat"><div class="stat-label">Health</div>' +
-        '<div class="health-meter-container" title="Health Score: ' +
-        healthPct +
-        '%">' +
-        '<div class="health-meter-bar"><div class="health-meter-fill" style="width:' +
-        healthPct +
-        "%;background:" +
-        healthColor +
-        '"></div></div>' +
-        '<div class="stat-value" style="color:' +
-        healthColor +
-        ';margin-top:0">' +
-        healthPct +
-        "%</div>" +
-        "</div></div>" +
+        '<div class="card-stat"><div class="stat-label">Health</div><div class="stat-value">' +
+        Math.round((a.healthScore || 0) * 100) +
+        "%</div></div>" +
         '<div class="card-stat"><div class="stat-label">Fresh Policy</div><div class="stat-value" style="color:' +
         (a.effectiveFreshWindowStartsAllowed
           ? "var(--green)"
@@ -2366,13 +2349,6 @@ function renderRoutingInspector(data) {
                 " / " +
                 entry.tokenBucket.capacity
               : "off";
-          var entryHealthPct = Math.round((entry.healthScore || 0) * 100);
-          var entryHealthColor =
-            entryHealthPct >= 80
-              ? "var(--green)"
-              : entryHealthPct >= 50
-                ? "var(--yellow)"
-                : "var(--red)";
           var decision = entry.rejectedReason
             ? '<span style="color:var(--yellow)">' +
               escapeHtml(entry.rejectedDetail || entry.rejectedReason) +
@@ -2392,11 +2368,11 @@ function renderRoutingInspector(data) {
             '<td style="padding:6px 8px;border-top:1px solid var(--border);font-family:JetBrains Mono,monospace">' +
             escapeHtml(quota) +
             "</td>" +
-            '<td style="padding:6px 8px;border-top:1px solid var(--border);font-family:JetBrains Mono,monospace;color:' +
-            entryHealthColor +
-            ';font-weight:600">' +
-            entryHealthPct +
-            "%</td>" +
+            '<td style="padding:6px 8px;border-top:1px solid var(--border);font-family:JetBrains Mono,monospace">' +
+            escapeHtml(
+              String(Math.round((entry.healthScore || 0) * 100)) + "%",
+            ) +
+            "</td>" +
             '<td style="padding:6px 8px;border-top:1px solid var(--border);font-family:JetBrains Mono,monospace">' +
             escapeHtml(tokenText) +
             "</td>" +
