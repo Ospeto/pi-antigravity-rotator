@@ -1,7 +1,6 @@
 // HTTP reverse proxy - forwards requests to Antigravity with credential rotation
 
 import { buildRotatorResponseHeaders } from "./response-headers.js";
-import { idempotencyManager } from "./idempotency.js";
 import {
   createServer,
   type IncomingMessage,

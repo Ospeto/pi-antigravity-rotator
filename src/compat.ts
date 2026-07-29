@@ -1171,9 +1171,9 @@ async function completeViaRotator(
   context?: RotationAttemptContext;
   isDeduplicated?: boolean;
 }> {
-  const cfg = typeof rotator?.getConfig === "function" ? rotator.getConfig() : {};
-  const enabled = cfg.idempotencyEnabled === true;
-  const windowMs = cfg.idempotencyWindowMs ?? 2000;
+  const cfg = typeof rotator?.getConfig === "function" ? rotator.getConfig() : undefined;
+  const enabled = cfg?.idempotencyEnabled === true;
+  const windowMs = cfg?.idempotencyWindowMs ?? 2000;
   const shouldDedup = enabled && streamMode === "none" && !idempotencyManager.isOptedOut(req);
 
   const runWithRotation = () =>
