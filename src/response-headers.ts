@@ -19,6 +19,12 @@ export function maskAccountLabel(account: string): string {
   return `${account.slice(0, 2)}***${account.slice(-2)}`;
 }
 
+export interface CompressionHeaderOptions {
+  mode: string;
+  savedChars: number;
+  savingsPercent: number;
+}
+
 export interface RotatorResponseHeaderOptions {
   accountLabel?: string;
   model?: string;
@@ -29,6 +35,7 @@ export interface RotatorResponseHeaderOptions {
   healthScore?: number;
   routingPolicy?: string;
   idempotencyHit?: boolean;
+  compression?: CompressionHeaderOptions;
 }
 
 /**
@@ -75,6 +82,11 @@ export function buildRotatorResponseHeaders(
   }
   if (opts.routingPolicy) {
     headers["X-Rotator-Routing-Policy"] = opts.routingPolicy;
+  }
+  if (opts.compression) {
+    headers["X-Rotator-Compression-Mode"] = opts.compression.mode;
+    headers["X-Rotator-Compression-Saved-Chars"] = String(opts.compression.savedChars);
+    headers["X-Rotator-Compression-Savings-Percent"] = String(opts.compression.savingsPercent);
   }
 
   return headers;

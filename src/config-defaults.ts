@@ -46,6 +46,7 @@ export function applyConfigDefaults(config: Config): Config {
 		tokenBucketInitialTokens: config.tokenBucketInitialTokens ?? (config.tokenBucketMaxTokens ?? 50),
 		idempotencyEnabled: config.idempotencyEnabled ?? true,
 		idempotencyWindowMs: config.idempotencyWindowMs ?? 2000,
+		compressionMode: config.compressionMode ?? "off",
 		accounts: config.accounts ? config.accounts.map((account) => ({
 			...account,
 			tier: account.tier || "unknown",

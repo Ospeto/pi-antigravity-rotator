@@ -1,6 +1,14 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
-import { buildRotatorResponseHeaders } from "./response-headers.js";
+import {
+  type CompressionHeaderOptions,
+  buildRotatorResponseHeaders,
+} from "./response-headers.js";
+import {
+  applyPromptCompression,
+  parseCompressionMode,
+  type CompressionStats,
+} from "./compression/index.js";
 import { idempotencyManager } from "./idempotency.js";
 import { authenticateVirtualKey, sendAuthErrorResponse } from "./key-auth.js";
 import { logSpend } from "./spend-logger.js";
@@ -244,6 +252,17 @@ export function parseAntigravitySse(raw: string): CompatCompletion {
   };
 }
 
+function getCompressionHeaderOpts(
+  stats?: CompressionStats | null,
+): CompressionHeaderOptions | undefined {
+  if (!stats) return undefined;
+  return {
+    mode: stats.mode,
+    savedChars: stats.savedChars,
+    savingsPercent: stats.savingsPercent,
+  };
+}
+
 function writeJson(
   res: ServerResponse,
   status: number,
@@ -360,6 +379,7 @@ async function streamCompatSse(
   format: "openai" | "anthropic",
   context?: RotationAttemptContext,
   rotator?: AccountRotator,
+  compressionStats?: CompressionStats | null,
 ): Promise<CompatCompletion> {
   const nodeStream = Readable.fromWeb(
     body as import("node:stream/web").ReadableStream,
@@ -390,6 +410,7 @@ async function streamCompatSse(
     ttfbMs: Date.now() - (context?.requestStartMs ?? streamStartMs),
     healthScore: context?.account?.healthScore,
     routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
+    compression: getCompressionHeaderOpts(compressionStats),
   });
 
   res.writeHead(200, {
@@ -711,6 +732,7 @@ async function streamResponsesSse(
   createdAt: number,
   context?: RotationAttemptContext,
   rotator?: AccountRotator,
+  compressionStats?: CompressionStats | null,
 ): Promise<CompatCompletion> {
   const nodeStream = Readable.fromWeb(
     body as import("node:stream/web").ReadableStream,
@@ -747,6 +769,7 @@ async function streamResponsesSse(
     ttfbMs: Date.now() - (context?.requestStartMs ?? streamStartMs),
     healthScore: context?.account?.healthScore,
     routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
+    compression: getCompressionHeaderOpts(compressionStats),
   });
 
   res.writeHead(200, {
@@ -1084,6 +1107,7 @@ async function completeResponsesViaRotator(
     requesterIp?: string | null;
     rawRequest?: unknown;
     rawResponse?: unknown;
+    compressionStats?: CompressionStats | null;
   },
 ): Promise<{
   completion: CompatCompletion;
@@ -1091,6 +1115,7 @@ async function completeResponsesViaRotator(
   errorText?: string;
   streamed: boolean;
   context?: RotationAttemptContext;
+  compressionStats?: CompressionStats | null;
 }> {
   const createdAt = Math.floor(Date.now() / 1000);
   const outcome = await withRotation(
@@ -1109,6 +1134,7 @@ async function completeResponsesViaRotator(
         createdAt,
         context,
         rotator,
+        options?.compressionStats,
       );
       if (completion.inputTokens > 0 || completion.outputTokens > 0) {
         rotator.recordTokenUsage(
@@ -1141,7 +1167,13 @@ async function completeResponsesViaRotator(
       context: outcome.context,
     };
   }
-  return { completion: outcome.result, status: 200, streamed: true, context: outcome.context };
+  return {
+    completion: outcome.result,
+    status: 200,
+    streamed: true,
+    context: outcome.context,
+    compressionStats: options?.compressionStats,
+  };
 }
 
 class NonOkOutcomeError extends Error {
@@ -1162,6 +1194,7 @@ async function completeViaRotator(
     requesterIp?: string | null;
     rawRequest?: unknown;
     rawResponse?: unknown;
+    compressionStats?: CompressionStats | null;
   },
 ): Promise<{
   completion: CompatCompletion;
@@ -1170,6 +1203,7 @@ async function completeViaRotator(
   streamed: boolean;
   context?: RotationAttemptContext;
   isDeduplicated?: boolean;
+  compressionStats?: CompressionStats | null;
 }> {
   const cfg = typeof rotator?.getConfig === "function" ? rotator.getConfig() : undefined;
   const enabled = cfg?.idempotencyEnabled === true;
@@ -1212,6 +1246,7 @@ async function completeViaRotator(
             streamMode,
             context,
             rotator,
+            options?.compressionStats,
           );
           if (completion.inputTokens > 0 || completion.outputTokens > 0) {
             rotator.recordTokenUsage(
@@ -1280,6 +1315,7 @@ async function completeViaRotator(
       streamed: false,
       context: outcome.context,
       isDeduplicated,
+      compressionStats: options?.compressionStats,
     };
   }
   return {
@@ -1288,6 +1324,7 @@ async function completeViaRotator(
     streamed: streamMode !== "none",
     context: outcome.context,
     isDeduplicated,
+    compressionStats: options?.compressionStats,
   };
 }
 
@@ -1509,7 +1546,7 @@ export async function handleGeminiGenerateContent(
   const ttfbMs = result.completion.firstByteMs ?? totalMs;
   const rotatorHeaders = buildRotatorResponseHeaders({
     accountLabel: result.context?.label,
-    model,
+    model: model,
     latencyMs: totalMs,
     ttfbMs,
     inputTokens: result.completion.inputTokens,
@@ -1517,6 +1554,7 @@ export async function handleGeminiGenerateContent(
     healthScore: result.context?.account?.healthScore,
     routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
     idempotencyHit: result.isDeduplicated,
+    compression: getCompressionHeaderOpts(result.compressionStats),
   });
   writeJson(res, 200, {
     candidates: [
@@ -1572,19 +1610,33 @@ export async function handleOpenAIChatCompletions(
   }
   const apiKeyHash = auth.key?.tokenHash || (auth.rawKey ? hashKey(auth.rawKey) : null);
 
+  const compMode = parseCompressionMode(
+    req.headers["x-rotator-compression"],
+    rotator?.getConfig?.()?.compressionMode,
+  );
+  const compRes = applyPromptCompression(
+    validation.value.messages,
+    compMode,
+    { model: validation.value.model },
+  );
+  const chatReq = compRes.stats
+    ? { ...validation.value, messages: compRes.messages }
+    : validation.value;
+
   const started = Date.now();
   const streamMode = validation.value.stream ? "openai" : "none";
   const result = await completeViaRotator(
     req,
     res,
     rotator,
-    openAIToAntigravityBody(validation.value),
+    openAIToAntigravityBody(chatReq),
     streamMode,
     {
       callType: "chat_completion",
       apiKeyHash,
       requesterIp: req.socket?.remoteAddress || null,
       rawRequest: validation.value,
+      compressionStats: compRes.stats,
     },
   );
   if (result.status !== 200) {
@@ -1697,7 +1749,20 @@ export async function handleOpenAIResponsesCreate(
 
   const responseId = makeCompatId("resp");
   const createdAt = Math.floor(Date.now() / 1000);
-  const requestBody = openAIToAntigravityBody(converted.chatRequest);
+  const compMode = parseCompressionMode(
+    req.headers["x-rotator-compression"],
+    rotator?.getConfig?.()?.compressionMode,
+  );
+  const compRes = applyPromptCompression(
+    converted.chatRequest.messages,
+    compMode,
+    { model: converted.chatRequest.model },
+  );
+  const chatRequest = compRes.stats
+    ? { ...converted.chatRequest, messages: compRes.messages }
+    : converted.chatRequest;
+
+  const requestBody = openAIToAntigravityBody(chatRequest);
   requestBody.requestId = responseId;
 
   if (validation.value.store !== false) {
@@ -1733,6 +1798,7 @@ export async function handleOpenAIResponsesCreate(
         callType: "responses",
         apiKeyHash,
         requesterIp: req.socket?.remoteAddress || null,
+        compressionStats: compRes.stats,
       },
     );
     if (result.status !== 200) {
@@ -1776,6 +1842,7 @@ export async function handleOpenAIResponsesCreate(
       apiKeyHash,
       requesterIp: req.socket?.remoteAddress || null,
       rawRequest: validation.value,
+      compressionStats: compRes.stats,
     },
   );
   if (result.status !== 200) {
@@ -1928,19 +1995,36 @@ export async function handleAnthropicMessages(
   }
   const apiKeyHash = auth.key?.tokenHash || (auth.rawKey ? hashKey(auth.rawKey) : null);
 
+  const compMode = parseCompressionMode(
+    req.headers["x-rotator-compression"],
+    rotator?.getConfig?.()?.compressionMode,
+  );
+  const compRes = applyPromptCompression(
+    validation.value.messages as ChatMessage[],
+    compMode,
+    { model: validation.value.model },
+  );
+  const anthropicReq = compRes.stats
+    ? {
+        ...validation.value,
+        messages: compRes.messages as typeof validation.value.messages,
+      }
+    : validation.value;
+
   const started = Date.now();
   const streamMode = validation.value.stream ? "anthropic" : "none";
   const result = await completeViaRotator(
     req,
     res,
     rotator,
-    anthropicToAntigravityBody(validation.value),
+    anthropicToAntigravityBody(anthropicReq),
     streamMode,
     {
       callType: "anthropic",
       apiKeyHash,
       requesterIp: req.socket?.remoteAddress || null,
       rawRequest: validation.value,
+      compressionStats: compRes.stats,
     },
   );
   if (result.status !== 200) {

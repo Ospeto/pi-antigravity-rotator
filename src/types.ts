@@ -77,6 +77,8 @@ export interface Config {
   // Deduplicate in-flight / short-window identical requests to prevent duplicate upstream calls.
   idempotencyEnabled?: boolean;
   idempotencyWindowMs?: number;
+  // Prompt compression mode ("off" | "lite" | "rtk" | "rtk+lite").
+  compressionMode?: "off" | "lite" | "rtk" | "rtk+lite";
   // Override per-model specs used by the compat layer. Keys are model id substrings
   // matched case-insensitively. When set, replaces the bundled defaults entirely.
   modelSpecs?: Record<string, ModelSpecConfig>;

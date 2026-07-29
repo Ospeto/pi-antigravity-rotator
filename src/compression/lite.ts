@@ -11,6 +11,8 @@ export interface LiteCompressionOptions {
   replaceImages?: boolean;
   /** Character length limit for system prompt deduplication hash comparison (default: 200) */
   maxSystemCharsHash?: number;
+  /** Target model name for model-specific optimizations */
+  model?: string;
 }
 
 export interface LiteCompressionResult {
