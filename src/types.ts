@@ -77,6 +77,8 @@ export interface Config {
   // Deduplicate in-flight / short-window identical requests to prevent duplicate upstream calls.
   idempotencyEnabled?: boolean;
   idempotencyWindowMs?: number;
+  // Retry upstream failures before any response bytes reach the client. Default: 2.
+  streamRecoveryMaxRetries?: number;
   // Prompt compression mode ("off" | "lite" | "rtk" | "rtk+lite").
   compressionMode?: "off" | "lite" | "rtk" | "rtk+lite";
   // Override per-model specs used by the compat layer. Keys are model id substrings
@@ -760,4 +762,3 @@ export interface DailySpend {
   failedRequests: number;
   totalDurationMs: number;
 }
-

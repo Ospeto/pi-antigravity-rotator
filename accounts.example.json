@@ -3,6 +3,7 @@
   "requestsPerRotation": 5,
   "rotateOnQuotaDrop": 20,
   "quotaPollIntervalMs": 300000,
+  "streamRecoveryMaxRetries": 2,
   "accounts": [
     {
       "email": "account1@gmail.com",

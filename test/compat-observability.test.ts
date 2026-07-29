@@ -480,6 +480,117 @@ describe("compat observability", () => {
     }
   });
 
+  it("emits a terminal error event when an OpenAI stream fails mid-response", async () => {
+    const upstream = await listenServer((req, res) => {
+      req.resume();
+      req.on("end", () => {
+        res.writeHead(200, { "Content-Type": "text/event-stream" });
+        res.write(
+          'data: {"response":{"candidates":[{"content":{"parts":[{"text":"partial"}]}}]}}\n\n',
+        );
+        setTimeout(() => res.destroy(), 20);
+      });
+    });
+    endpointOverrides.splice(0, endpointOverrides.length, upstream.url);
+
+    const tracking = createTracking();
+    const proxy = await startTestProxy(createRotatorStub(tracking));
+    const port = (proxy.address() as AddressInfo).port;
+
+    try {
+      const body = JSON.stringify({
+        model: "gemini-3.5-flash",
+        messages: [{ role: "user", content: "ping" }],
+        stream: true,
+      });
+      const response = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      const responseBody = await response.text();
+
+      assert.equal(response.status, 200);
+      assert.match(responseBody, /"type":"server_error"/);
+      assert.match(responseBody, /data: \[DONE\]/);
+      await waitFor(() => tracking.requestLogs.length === 1);
+      assert.equal(tracking.requestLogs[0].statusCode, 502);
+    } finally {
+      await closeHttpServer(proxy);
+      await closeHttpServer(upstream.server);
+    }
+  });
+
+  it("emits terminal error events for Responses, Anthropic, and native streams", async () => {
+    const upstream = await listenServer((req, res) => {
+      req.resume();
+      req.on("end", () => {
+        res.writeHead(200, { "Content-Type": "text/event-stream" });
+        res.flushHeaders();
+        res.write(
+          'data: {"candidates":[{"content":{"parts":[{"text":"partial"}]}}]}\n\n',
+        );
+        setTimeout(() => {
+          res.write(
+            'data: {"candidates":[{"content":{"parts":[{"text":"more"}]}}]}\n\n',
+          );
+        }, 100);
+        setTimeout(() => res.destroy(), 200);
+      });
+    });
+    endpointOverrides.splice(0, endpointOverrides.length, upstream.url);
+
+    const tracking = createTracking();
+    const proxy = await startTestProxy(createRotatorStub(tracking));
+    const port = (proxy.address() as AddressInfo).port;
+    const cases = [
+      {
+        path: "/v1/responses",
+        payload: {
+          model: "gemini-3.5-flash",
+          input: "ping",
+          stream: true,
+        },
+        marker: /"code":"stream_error"/,
+      },
+      {
+        path: "/v1/messages",
+        payload: {
+          model: "claude-sonnet-4-6",
+          max_tokens: 32,
+          messages: [{ role: "user", content: "ping" }],
+          stream: true,
+        },
+        marker: /event: error/,
+      },
+      {
+        path: "/v1internal:streamGenerateContent?alt=sse",
+        payload: {
+          model: "gemini-3-flash",
+          request: { contents: [{ role: "user", parts: [{ text: "ping" }] }] },
+        },
+        marker: /BAD_GATEWAY/,
+      },
+    ];
+
+    try {
+      for (const testCase of cases) {
+        const response = await fetch(`http://127.0.0.1:${port}${testCase.path}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(testCase.payload),
+        });
+        const responseBody = await response.text();
+        assert.equal(response.status, 200, testCase.path);
+        assert.match(responseBody, testCase.marker, testCase.path);
+      }
+      await waitFor(() => tracking.requestLogs.length === cases.length);
+    } finally {
+      await closeHttpServer(proxy);
+      await closeHttpServer(upstream.server);
+    }
+  });
+
   it("releases an in-flight compat chat request when the client disconnects before upstream completes", async () => {
     await assertCompatAbortReleasesInFlight("/v1/chat/completions", {
       model: "gemini-3.5-flash",

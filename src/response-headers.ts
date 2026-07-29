@@ -35,6 +35,7 @@ export interface RotatorResponseHeaderOptions {
   healthScore?: number;
   routingPolicy?: string;
   idempotencyHit?: boolean;
+  retries?: number;
   compression?: CompressionHeaderOptions;
 }
 
@@ -48,6 +49,10 @@ export function buildRotatorResponseHeaders(
 
   if (opts.idempotencyHit) {
     headers["X-Rotator-Idempotency-Hit"] = "true";
+  }
+
+  if (opts.retries !== undefined && opts.retries > 0) {
+    headers["X-Rotator-Retries"] = String(Math.floor(opts.retries));
   }
 
   if (opts.accountLabel) {

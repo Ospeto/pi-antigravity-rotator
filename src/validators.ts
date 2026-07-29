@@ -35,6 +35,10 @@ function isNonNegativeNumber(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
+function isNonNegativeInteger(value: unknown): value is number {
+	return isNonNegativeNumber(value) && Number.isInteger(value);
+}
+
 export function validateAccountConfig(value: unknown, path = "account"): ValidationResult<AccountConfig> {
 	if (!isRecord(value)) return fail([`${path} must be an object`]);
 	const errors: string[] = [];
@@ -104,6 +108,9 @@ export function validateConfig(value: unknown): ValidationResult<Config> {
 	}
 	if (value.tokenBucketInitialTokens !== undefined && !isNonNegativeNumber(value.tokenBucketInitialTokens)) {
 		errors.push("config.tokenBucketInitialTokens must be a non-negative number");
+	}
+	if (value.streamRecoveryMaxRetries !== undefined && !isNonNegativeInteger(value.streamRecoveryMaxRetries)) {
+		errors.push("config.streamRecoveryMaxRetries must be a non-negative integer");
 	}
 	if (value.modelSpecs !== undefined) {
 		if (!isRecord(value.modelSpecs)) {

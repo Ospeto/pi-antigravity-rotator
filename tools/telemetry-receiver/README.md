@@ -2,6 +2,8 @@
 
 Minimal HTTP server that receives anonymous telemetry events from pi-antigravity-rotator instances and stores them as JSONL files (one per day).
 
+[View the hosted public stats page](https://telemetry.tuxevil.com/stats).
+
 **Zero dependencies** — runs on Node.js 18+ with native `http`/`fs`.
 
 ## Deploy to your VPS
@@ -55,7 +57,7 @@ server {
     ssl_certificate     /etc/letsencrypt/live/telemetry.yourdomain.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/telemetry.yourdomain.com/privkey.pem;
 
-    location /v1/ {
+    location / {
         proxy_pass http://127.0.0.1:3800;
         proxy_set_header X-Forwarded-For $remote_addr;
     }
@@ -69,6 +71,7 @@ server {
 | `POST` | `/v1/events` | none | Receive telemetry payload |
 | `GET` | `/v1/stats` | `Bearer STATS_TOKEN` | Aggregate statistics |
 | `GET` | `/v1/public-stats` | none | Public aggregate stats for badges (5-min cache) |
+| `GET` | `/stats` | none | Public aggregate stats page |
 | `GET` | `/v1/health` | none | Health check |
 
 ### Public Stats Response

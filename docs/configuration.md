@@ -67,6 +67,7 @@ The main configuration file. Created automatically by the `login` command, and e
   "slowModeJitterMaxMs": 25000,
   "protectivePauseMs": 21600000,
   "useRequestCountRotationWhenQuotaUnknownOnly": true,
+  "streamRecoveryMaxRetries": 2,
   "accounts": [
     {
       "email": "user@gmail.com",
@@ -107,6 +108,7 @@ The main configuration file. Created automatically by the `login` command, and e
 | `tokenBucketMaxTokens` | `50` | Bucket capacity when enabled |
 | `tokenBucketRefillPerMinute` | `6` | Refill speed when enabled |
 | `tokenBucketInitialTokens` | `50` | Startup fill level when enabled |
+| `streamRecoveryMaxRetries` | `2` | Maximum account rotations for upstream failures before the response is flushed |
 
 ## Account Fields
 

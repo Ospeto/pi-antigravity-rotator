@@ -72,17 +72,32 @@ type RotatorTracking = {
 	finishRequest?: number;
 };
 
-function makeRotator(account: AccountRuntime, tracking: RotatorTracking = {}): AccountRotator {
+type RotatorOptions = {
+	accounts?: AccountRuntime[];
+	streamRecoveryMaxRetries?: number;
+};
+
+function makeRotator(
+	account: AccountRuntime,
+	tracking: RotatorTracking = {},
+	options: RotatorOptions = {},
+): AccountRotator {
 	tracking.markExhausted ??= 0;
 	tracking.markFlagged ??= 0;
 	tracking.markError ??= 0;
 	tracking.recordRequest ??= 0;
 	tracking.recordProvider429 ??= 0;
 	tracking.finishRequest ??= 0;
+	const accounts = [account, ...(options.accounts || [])];
+	let activeIndex = 0;
 	return {
-		getActiveAccount: async () => account,
+		getActiveAccount: async () => accounts[activeIndex],
 		getRetryAfterMs: () => 0,
-		rotateToNext: async () => null,
+		rotateToNext: async () => {
+			if (activeIndex >= accounts.length - 1) return null;
+			activeIndex += 1;
+			return accounts[activeIndex];
+		},
 		finishRequest: () => { tracking.finishRequest!++; },
 		getSafetyJitterMs: () => 0,
 		recordUpstreamAttempt: () => {},
@@ -102,6 +117,9 @@ function makeRotator(account: AccountRuntime, tracking: RotatorTracking = {}): A
 		recordRequest: () => { tracking.recordRequest!++; return false; },
 		recordProxyEvent: () => {},
 		getGlobalDelayMs: () => 0,
+		getConfig: () => ({
+			streamRecoveryMaxRetries: options.streamRecoveryMaxRetries ?? 2,
+		}),
 	} as unknown as AccountRotator;
 }
 
@@ -211,6 +229,130 @@ describe("proxy e2e: hop-by-hop header stripping (S7)", () => {
 			await upstream.close();
 		}
 	});
+});
+
+describe("proxy e2e: pre-flush stream recovery", () => {
+  it("rotates after a transport failure and exposes the retry count", async () => {
+    const captures: Capture[] = [];
+    let calls = 0;
+    const upstream = await listen((req, res) => {
+      calls += 1;
+      if (calls === 1) {
+        res.destroy();
+        return;
+      }
+      let body = "";
+      req.on("data", (chunk) => { body += chunk.toString(); });
+      req.on("end", () => {
+        captures.push({ url: req.url || "", headers: req.headers, body });
+        res.writeHead(200, { "Content-Type": "text/event-stream" });
+        res.end("data: ok\n\n");
+      });
+    });
+    endpointOverrides.splice(0, endpointOverrides.length, upstream.url);
+
+    const first = makeAccount("first@example.com");
+    const second = makeAccount("second@example.com");
+    const rotator = makeRotator(first, {}, {
+      accounts: [second],
+      streamRecoveryMaxRetries: 2,
+    });
+
+    try {
+      const outcome = await withRotation(
+        rotator,
+        "gemini-3.1-pro",
+        {},
+        makeBody(),
+        async (response) => response.text(),
+      );
+
+      assert.equal(outcome.ok, true);
+      if (outcome.ok) {
+        assert.equal(outcome.result, "data: ok\n\n");
+        assert.equal(outcome.context?.retries, 1);
+      }
+      assert.equal(calls, 2);
+      assert.equal(captures[0].headers.authorization, "Bearer token-second@example.com");
+    } finally {
+      await upstream.close();
+    }
+  });
+
+  it("retries an upstream 503 before returning an error to the client", async () => {
+    let calls = 0;
+    const upstream = await listen((req, res) => {
+      calls += 1;
+      req.resume();
+      req.once("end", () => {
+        if (calls === 1) {
+          res.writeHead(503, { "Content-Type": "text/plain" });
+          res.end("temporarily unavailable");
+          return;
+        }
+        res.writeHead(200, { "Content-Type": "text/plain" });
+        res.end("recovered");
+      });
+    });
+    endpointOverrides.splice(0, endpointOverrides.length, upstream.url);
+
+    try {
+      const outcome = await withRotation(
+        makeRotator(makeAccount("first@example.com"), {}, {
+          accounts: [makeAccount("second@example.com")],
+        }),
+        "gemini-3.1-pro",
+        {},
+        makeBody(),
+        async (response) => response.text(),
+      );
+
+      assert.equal(outcome.ok, true);
+      if (outcome.ok) {
+        assert.equal(outcome.result, "recovered");
+        assert.equal(outcome.context?.retries, 1);
+      }
+      assert.equal(calls, 2);
+    } finally {
+      await upstream.close();
+    }
+  });
+
+  it("honors the configured retry limit", async () => {
+    let calls = 0;
+    const upstream = await listen((req, res) => {
+      calls += 1;
+      req.resume();
+      req.once("end", () => {
+        res.writeHead(500, { "Content-Type": "text/plain" });
+        res.end("still unavailable");
+      });
+    });
+    endpointOverrides.splice(0, endpointOverrides.length, upstream.url);
+
+    try {
+      const outcome = await withRotation(
+        makeRotator(makeAccount("first@example.com"), {}, {
+          accounts: [
+            makeAccount("second@example.com"),
+            makeAccount("third@example.com"),
+            makeAccount("fourth@example.com"),
+          ],
+          streamRecoveryMaxRetries: 2,
+        }),
+        "gemini-3.1-pro",
+        {},
+        makeBody(),
+        async () => "should-not-reach",
+      );
+
+      assert.equal(outcome.ok, false);
+      assert.equal(calls, 3);
+      if (!outcome.ok) assert.equal(outcome.context?.retries, 2);
+    } finally {
+      await upstream.close();
+    }
+  });
 });
 
 describe("proxy e2e: 429 rate-limited", () => {

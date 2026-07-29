@@ -14,6 +14,7 @@
 //   POST /v1/events         — Receive a telemetry payload
 //   GET  /v1/stats          — Aggregate stats (protected by STATS_TOKEN)
 //   GET  /v1/public-stats   — Public aggregate stats for badges (no auth, 5-min cache)
+//   GET  /stats              — Public aggregate stats page
 //   GET  /v1/health         — Health check
 //
 // Environment:
@@ -722,6 +723,95 @@ function getPublicStats() {
 		}
 	}
 	return publicStatsCache;
+}
+
+// ── Public stats page ─────────────────────────────────────────────────
+function buildPublicStatsHtml() {
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="description" content="Anonymous usage statistics for Pi Antigravity Rotator">
+<title>Pi Rotator Stats</title>
+<style>
+:root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0f1117;color:#e2e8f0}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(circle at top,#1a2538 0,#0f1117 42rem);padding:24px}
+main{max-width:920px;margin:0 auto;padding:clamp(28px,7vw,72px) 0}
+.eyebrow{color:#63b3ed;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+h1{margin:10px 0 12px;color:#fff;font-size:clamp(32px,6vw,56px);letter-spacing:-.04em;line-height:1}
+.intro{max-width:560px;margin:0;color:#a0aec0;font-size:16px;line-height:1.6}
+.intro a,.footer a{color:#90cdf4;text-decoration:none}
+.intro a:hover,.footer a:hover{text-decoration:underline}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:40px 0 18px}
+.stat{min-height:126px;padding:20px;background:rgba(26,31,46,.88);border:1px solid #2d3748;border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,.16)}
+.stat-label{color:#718096;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.stat-value{margin-top:16px;color:#fff;font-size:clamp(25px,4vw,36px);font-weight:800;letter-spacing:-.03em}
+.stat:nth-child(1) .stat-value{color:#b794f4}
+.stat:nth-child(2) .stat-value{color:#68d391}
+.stat:nth-child(3) .stat-value{color:#f6e05e}
+.stat:nth-child(4) .stat-value{color:#63b3ed}
+.stat:nth-child(5) .stat-value{color:#90cdf4}
+.status{min-height:20px;color:#718096;font-size:12px}
+.status.error{color:#fc8181}
+.footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:56px;padding-top:16px;border-top:1px solid #2d3748;color:#718096;font-size:12px}
+@media (max-width:520px){body{padding:18px}.stats-grid{margin-top:30px}.stat{min-height:112px;padding:16px}.stat-value{margin-top:12px}}
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Pi Antigravity Rotator</div>
+  <h1>Usage at a glance.</h1>
+  <p class="intro">Anonymous aggregate telemetry from the community. Values refresh automatically every five minutes. <a href="/v1/public-stats">View the raw data</a>.</p>
+  <section class="stats-grid" aria-label="Public usage statistics">
+    <article class="stat"><div class="stat-label">Installations</div><div class="stat-value" id="installs">-</div></article>
+    <article class="stat"><div class="stat-label">Requests routed</div><div class="stat-value" id="requests">-</div></article>
+    <article class="stat"><div class="stat-label">Estimated savings</div><div class="stat-value" id="savings">-</div></article>
+    <article class="stat"><div class="stat-label">Input tokens</div><div class="stat-value" id="tokensInput">-</div></article>
+    <article class="stat"><div class="stat-label">Output tokens</div><div class="stat-value" id="tokensOutput">-</div></article>
+  </section>
+  <div class="status" id="status" role="status" aria-live="polite">Loading live totals...</div>
+  <footer class="footer"><span>Updated from anonymous telemetry</span><a href="https://github.com/tuxevil/pi-antigravity-rotator">View the project on GitHub</a></footer>
+</main>
+<script>
+const REFRESH_MS = 5 * 60 * 1000;
+const fields = [
+  ["installs", "installsFormatted"],
+  ["requests", "requestsFormatted"],
+  ["savings", "savingsFormatted"],
+  ["tokensInput", "tokensInputFormatted"],
+  ["tokensOutput", "tokensOutputFormatted"],
+];
+
+function formatUpdatedAt(value) {
+  if (!value) return "Updated just now";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Updated just now" : "Updated " + date.toLocaleString();
+}
+
+async function loadStats() {
+  const status = document.getElementById("status");
+  try {
+    const response = await fetch("/v1/public-stats", { cache: "no-store" });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const stats = await response.json();
+    for (const [elementId, field] of fields) {
+      document.getElementById(elementId).textContent = stats[field] ?? "-";
+    }
+    status.className = "status";
+    status.textContent = formatUpdatedAt(stats.updatedAt);
+  } catch (error) {
+    status.className = "status error";
+    status.textContent = "Live totals are temporarily unavailable. Retrying in five minutes.";
+  }
+}
+
+loadStats();
+setInterval(loadStats, REFRESH_MS);
+</script>
+</body>
+</html>`;
 }
 
 // ── Rate limiting (simple in-memory per-IP) ──────────────────────────
@@ -1616,6 +1706,16 @@ const server = createServer(async (req, res) => {
 	if (method === "GET" && (url === "/" || url === "/dashboard")) {
 		res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
 		res.end(buildDashboardHtml());
+		return;
+	}
+
+	// Public stats page
+	if (method === "GET" && url === "/stats") {
+		res.writeHead(200, {
+			"Content-Type": "text/html; charset=utf-8",
+			"Cache-Control": "no-cache",
+		});
+		res.end(buildPublicStatsHtml());
 		return;
 	}
 

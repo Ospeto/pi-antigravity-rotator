@@ -35,6 +35,7 @@ describe("response headers", () => {
         outputTokens: 500,
         healthScore: 0.95,
         routingPolicy: "timer-first",
+        retries: 2,
       });
 
       assert.equal(headers["X-Rotator-Account"], "de***t@gmail.com");
@@ -46,6 +47,7 @@ describe("response headers", () => {
       assert.equal(headers["X-Rotator-Cost-Usd"], "0.010500");
       assert.equal(headers["X-Rotator-Health-Score"], "0.95");
       assert.equal(headers["X-Rotator-Routing-Policy"], "timer-first");
+      assert.equal(headers["X-Rotator-Retries"], "2");
     });
 
     it("builds partial headers when only some options are provided", () => {
@@ -60,6 +62,7 @@ describe("response headers", () => {
       assert.equal(headers["X-Rotator-TTFB-Ms"], "150");
       assert.equal(headers["X-Rotator-Tokens-Input"], undefined);
       assert.equal(headers["X-Rotator-Cost-Usd"], undefined);
+      assert.equal(headers["X-Rotator-Retries"], undefined);
     });
   });
 });

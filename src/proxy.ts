@@ -98,7 +98,7 @@ import { hashKey } from "./virtual-keys.js";
 
 const proxyLogger = logger.child("proxy");
 
-const MAX_ENDPOINT_RETRIES = 3;
+const DEFAULT_STREAM_RECOVERY_MAX_RETRIES = 2;
 const MAX_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes max cooldown
 const RESOURCE_EXHAUSTED_COOLDOWN_MS = 30 * 60 * 1000; // Stop hammering provider-side daily/request buckets
 const STREAM_IDLE_TIMEOUT_MS = 2 * 60 * 1000; // Release account if a stream goes silent.
@@ -106,6 +106,23 @@ const LARGE_CONTEXT_WARN_BYTES = 1 * 1024 * 1024;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export class PreFlushStreamError extends Error {
+  constructor(cause: unknown) {
+    super(`Upstream stream failed before response flush: ${formatError(cause)}`, {
+      cause,
+    });
+    this.name = "PreFlushStreamError";
+  }
+}
+
+function getStreamRecoveryMaxRetries(rotator: AccountRotator): number {
+  const configured = rotator.getConfig?.().streamRecoveryMaxRetries;
+  if (configured === undefined || !Number.isInteger(configured) || configured < 0) {
+    return DEFAULT_STREAM_RECOVERY_MAX_RETRIES;
+  }
+  return configured;
 }
 
 export interface RequestBody {
@@ -155,6 +172,7 @@ export interface RotationAttemptContext {
   requestId: string;
   requestStartMs: number;
   endpoint: string;
+  retries: number;
 }
 
 export type RotationOutcome<T> =
@@ -323,6 +341,7 @@ type UpstreamActionHandlerOptions = {
   context: RotationAttemptContext;
   logRequestEnd: (status: string | number, extra?: string) => void;
   rotateAndRelease: () => Promise<AccountRuntime | null>;
+  canRetry: boolean;
   writeLog: (message: string, level?: "info" | "warn" | "error") => void;
   recordFailureAttempt?: (statusCode: number) => void;
 };
@@ -435,6 +454,9 @@ async function handleUpstreamAccountAction(
       `Account blocked (401): ${action.errorText.slice(0, 300)}`,
     );
     logRequestEnd(401, `endpoint=${action.endpoint}`);
+    if (!options.canRetry) {
+      return buildFailureDecision(options, 401, action.errorText);
+    }
     const nextAccount = await rotateAndRelease();
     if (!nextAccount) {
       return buildNoReplacementDecision(
@@ -469,6 +491,9 @@ async function handleUpstreamAccountAction(
       timeSinceLastFlagSeconds: -1,
     });
     rotator.markFlagged(account, action.errorText.slice(0, 300));
+    if (!options.canRetry) {
+      return buildFailureDecision(options, 403, action.errorText);
+    }
     const nextAccount = await rotateAndRelease();
     if (!nextAccount) {
       return buildNoReplacementDecision(
@@ -510,7 +535,18 @@ async function handleUpstreamAccountAction(
     );
     recordFailureAttempt?.(503);
     logRequestEnd(503, `endpoint=${action.endpoint}`);
-    return buildFailureDecision(options, 503, action.errorText);
+    rotator.markError(account, `503: ${action.errorText.slice(0, 200)}`);
+    if (!options.canRetry) {
+      return buildFailureDecision(options, 503, action.errorText);
+    }
+    const nextAccount = await rotateAndRelease();
+    if (!nextAccount) {
+      return buildNoReplacementDecision(
+        options,
+        `no replacement account remained after ${label} failed with 503`,
+      );
+    }
+    return { kind: "retry" };
   }
 
   writeLog(
@@ -523,6 +559,9 @@ async function handleUpstreamAccountAction(
     account,
     `${action.httpStatus}: ${action.errorText.slice(0, 200)}`,
   );
+  if (!options.canRetry) {
+    return buildFailureDecision(options, action.httpStatus, action.errorText);
+  }
   const nextAccount = await rotateAndRelease();
   if (!nextAccount) {
     return buildNoReplacementDecision(
@@ -561,7 +600,16 @@ function formatError(err: unknown): string {
 }
 
 function isFetchTransportError(err: unknown): boolean {
-  return err instanceof TypeError && err.message === "fetch failed";
+  if (err instanceof PreFlushStreamError) return true;
+  if (err instanceof TypeError && /^(fetch failed|terminated)$/i.test(err.message)) {
+    return true;
+  }
+  if (err && typeof err === "object" && "code" in err) {
+    return ["ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_SOCKET"].includes(
+      String(err.code),
+    );
+  }
+  return false;
 }
 
 /** Max bytes kept in the SSE event buffer. A single event is rarely >1MB;
@@ -769,28 +817,39 @@ async function streamResponseBody(
   res: ServerResponse,
   label: string,
   proxyLog: (msg: string, level?: "info" | "warn" | "error") => void,
+  responseStatus: number,
+  responseHeaders: Record<string, string>,
 ): Promise<{
   inputTokens: number;
   outputTokens: number;
   firstByteMs: number;
   responseText?: string;
+  streamError?: string;
 } | null> {
-  if (!body) return null;
+  if (!body) {
+    if (!res.headersSent && !res.destroyed) {
+      res.writeHead(responseStatus, responseHeaders);
+    }
+    return null;
+  }
 
   const nodeStream = Readable.fromWeb(
     body as import("node:stream/web").ReadableStream,
   );
   const eventAccumulator = new SseEventAccumulator();
   let firstUsage: { inputTokens: number; outputTokens: number } | null = null;
+  let streamError: string | undefined;
   const streamStartMs = Date.now();
   let firstByteMs = 0;
+  let hasForwardedBytes = false;
 
   const usage = await new Promise<{
     inputTokens: number;
     outputTokens: number;
     firstByteMs: number;
     responseText?: string;
-  } | null>((resolve) => {
+    streamError?: string;
+  } | null>((resolve, reject) => {
     let settled = false;
     let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -812,14 +871,42 @@ async function streamResponseBody(
       cleanup();
       // Drain any partial event that didn't end with \n\n
       if (!firstUsage) firstUsage = eventAccumulator.final();
-      resolve(firstUsage ? { ...firstUsage, firstByteMs, responseText: eventAccumulator.getText() } : null);
+      if (firstUsage || streamError) {
+        resolve({
+          ...(firstUsage || { inputTokens: 0, outputTokens: 0 }),
+          firstByteMs,
+          responseText: eventAccumulator.getText(),
+          streamError,
+        });
+      } else {
+        resolve(null);
+      }
+    };
+
+    const failBeforeFlush = (err: unknown): void => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new PreFlushStreamError(err));
+    };
+
+    const emitStreamError = (err: unknown): void => {
+      streamError = formatError(err).slice(0, 200);
+      if (res.destroyed || res.writableEnded) return;
+      res.write(
+        `data: ${JSON.stringify({ error: { code: 502, status: "BAD_GATEWAY", message: streamError } })}\n\n`,
+      );
     };
 
     const resetIdleTimer = (): void => {
       if (idleTimer) clearTimeout(idleTimer);
       idleTimer = setTimeout(() => {
-        finish(
+        const error = new Error(
           `idle timeout after ${Math.round(STREAM_IDLE_TIMEOUT_MS / 1000)}s`,
+        );
+        if (hasForwardedBytes) emitStreamError(error);
+        finish(
+          error.message,
         );
         if (!nodeStream.destroyed) nodeStream.destroy();
       }, STREAM_IDLE_TIMEOUT_MS);
@@ -830,6 +917,8 @@ async function streamResponseBody(
       resetIdleTimer();
       // Forward to client immediately (real-time streaming preserved)
       if (!res.destroyed && !res.writableEnded) {
+        if (!res.headersSent) res.writeHead(responseStatus, responseHeaders);
+        hasForwardedBytes = true;
         res.write(chunk);
       }
       // Extract usage from any newly-completed SSE events
@@ -839,8 +928,22 @@ async function streamResponseBody(
       }
     };
     const onEnd = (): void => finish();
-    const onError = (err: Error): void => finish(String(err));
-    const onClose = (): void => finish();
+    const onError = (err: Error): void => {
+      if (!hasForwardedBytes) {
+        failBeforeFlush(err);
+      } else {
+        emitStreamError(err);
+        finish(String(err));
+      }
+    };
+    const onClose = (): void => {
+      if (!hasForwardedBytes) {
+        failBeforeFlush(new Error("upstream stream closed before response data"));
+      } else {
+        emitStreamError(new Error("upstream stream closed before response completion"));
+        finish();
+      }
+    };
     // req.aborted is deprecated and unreliable since Node 18+.
     // req.on("close") is the correct signal for client disconnect in Node 22.
     const onClientClose = (): void => {
@@ -872,6 +975,10 @@ async function streamResponseBody(
     res.once("error", onResponseError);
     resetIdleTimer();
   });
+
+  if (!res.headersSent && !res.destroyed) {
+    res.writeHead(responseStatus, responseHeaders);
+  }
 
   return usage;
 }
@@ -1285,7 +1392,10 @@ export async function withRotation<T>(
     return nextAccount;
   };
 
-  for (let attempt = 0; attempt < MAX_ENDPOINT_RETRIES; attempt++) {
+  const maxRetries = getStreamRecoveryMaxRetries(rotator);
+  const maxAttempts = maxRetries + 1;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const account = await rotator.getActiveAccount(model);
     if (!account) {
       return sendNoAccountsAvailable("rotation returned no available account");
@@ -1346,6 +1456,7 @@ export async function withRotation<T>(
         requestId,
         requestStartMs,
         endpoint,
+        retries: attempt,
       };
 
       const action = await classifyUpstreamResponse(
@@ -1367,6 +1478,7 @@ export async function withRotation<T>(
           context,
           logRequestEnd,
           rotateAndRelease,
+          canRetry: attempt < maxRetries,
           writeLog: (message, level = "info") => log(message, rotator, level),
         });
         if (decision.kind === "retry") continue;
@@ -1394,6 +1506,40 @@ export async function withRotation<T>(
       );
       if (!isFetchTransportError(err)) {
         rotator.markError(account, formattedError);
+        return {
+          ok: false,
+          status: 502,
+          errorText: formattedError,
+          context: {
+            account,
+            label,
+            modelKey,
+            displayModelKey,
+            requestId,
+            requestStartMs,
+            endpoint: "unknown",
+            retries: attempt,
+          },
+          totalMs: Date.now() - requestStartMs,
+        };
+      }
+      if (attempt >= maxRetries) {
+        return {
+          ok: false,
+          status: 502,
+          errorText: "All retry attempts failed",
+          context: {
+            account,
+            label,
+            modelKey,
+            displayModelKey,
+            requestId,
+            requestStartMs,
+            endpoint: "unknown",
+            retries: attempt,
+          },
+          totalMs: Date.now() - requestStartMs,
+        };
       }
       const nextAccount = await rotateAndRelease();
       if (!nextAccount) {
@@ -1600,7 +1746,9 @@ async function handleProxyRequest(
     res.end(decision.errorText || JSON.stringify({ error: "Upstream error" }));
   };
 
-  for (let attempt = 0; attempt < MAX_ENDPOINT_RETRIES; attempt++) {
+  const maxRetries = getStreamRecoveryMaxRetries(rotator);
+  const maxAttempts = maxRetries + 1;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const account = await rotator.getActiveAccount(body.model);
     if (!account) {
       sendNoAccountsAvailable("rotation returned no available account");
@@ -1665,6 +1813,16 @@ async function handleProxyRequest(
         flattenHeaders(req.headers),
       );
       const { response, endpoint } = forwarded;
+      const context: RotationAttemptContext = {
+        account,
+        label,
+        modelKey,
+        displayModelKey,
+        requestId,
+        requestStartMs,
+        endpoint,
+        retries: attempt,
+      };
 
       const action = await classifyUpstreamResponse(
         response,
@@ -1675,15 +1833,6 @@ async function handleProxyRequest(
       );
 
       if (action.kind !== "success") {
-        const context: RotationAttemptContext = {
-          account,
-          label,
-          modelKey,
-          displayModelKey,
-          requestId,
-          requestStartMs,
-          endpoint,
-        };
         const decision = await handleUpstreamAccountAction({
           action,
           rotator,
@@ -1694,6 +1843,7 @@ async function handleProxyRequest(
           context,
           logRequestEnd,
           rotateAndRelease,
+          canRetry: attempt < maxRetries,
           writeLog: proxyLog,
           recordFailureAttempt: recordOutcome,
         });
@@ -1721,10 +1871,9 @@ async function handleProxyRequest(
         ttfbMs: Date.now() - requestStartMs,
         healthScore: account.healthScore,
         routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
+        retries: attempt,
       });
       Object.assign(responseHeaders, rotatorHeaders);
-
-      res.writeHead(response.status, responseHeaders);
 
       try {
         const usage = await streamResponseBody(
@@ -1733,15 +1882,18 @@ async function handleProxyRequest(
           res,
           label,
           proxyLog,
+          response.status,
+          responseHeaders,
         );
         const totalMs = Date.now() - requestStartMs;
         const ttfbMs = usage?.firstByteMs ?? totalMs;
+        const outcomeStatus = usage?.streamError ? 502 : response.status;
         rotator.recordLatency(body.displayModel || body.model, ttfbMs, totalMs);
-        logRequestEnd(response.status, `ttfbMs=${ttfbMs} endpoint=${endpoint}`);
+        logRequestEnd(outcomeStatus, `ttfbMs=${ttfbMs} endpoint=${endpoint}`);
         rotator.recordRequestLog({
           model: displayModelKey,
           account: label,
-          statusCode: response.status,
+          statusCode: outcomeStatus,
           ttfbMs,
           totalMs,
           inputTokens: usage?.inputTokens ?? 0,
@@ -1753,7 +1905,7 @@ async function handleProxyRequest(
           model: displayModelKey,
           accountEmail: label,
           callType: "native",
-          status: response.status >= 200 && response.status < 300 ? "success" : "failure",
+          status: outcomeStatus >= 200 && outcomeStatus < 300 ? "success" : "failure",
           promptTokens: usage?.inputTokens ?? 0,
           completionTokens: usage?.outputTokens ?? 0,
           totalTokens: (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0),
@@ -1776,6 +1928,7 @@ async function handleProxyRequest(
         }
       } catch (err) {
         proxyLog(`[${label}] Stream setup error: ${err}`, "warn");
+        if (err instanceof PreFlushStreamError) throw err;
       }
       res.end();
 
@@ -1797,8 +1950,13 @@ async function handleProxyRequest(
       if (!isFetchTransportError(err)) {
         rotator.markError(account, formattedError);
       }
-      if (res.headersSent) {
+      if (res.headersSent || res.destroyed) {
         res.end();
+        return;
+      }
+      if (!isFetchTransportError(err) || attempt >= maxRetries) {
+        res.writeHead(502, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: formattedError }));
         return;
       }
       const nextAccount = await rotateAndRelease();

@@ -17,6 +17,11 @@ function safeQuotaPollIntervalMs(value: number | undefined): number {
 	return Math.floor(value);
 }
 
+function safeStreamRecoveryMaxRetries(value: number | undefined): number {
+	if (value === undefined || !Number.isInteger(value) || value < 0) return 2;
+	return value;
+}
+
 export function applyConfigDefaults(config: Config): Config {
 	return {
 		proxyPort: config.proxyPort || 51200,
@@ -46,6 +51,7 @@ export function applyConfigDefaults(config: Config): Config {
 		tokenBucketInitialTokens: config.tokenBucketInitialTokens ?? (config.tokenBucketMaxTokens ?? 50),
 		idempotencyEnabled: config.idempotencyEnabled ?? true,
 		idempotencyWindowMs: config.idempotencyWindowMs ?? 2000,
+		streamRecoveryMaxRetries: safeStreamRecoveryMaxRetries(config.streamRecoveryMaxRetries),
 		compressionMode: config.compressionMode ?? "off",
 		accounts: config.accounts ? config.accounts.map((account) => ({
 			...account,
@@ -80,5 +86,6 @@ export function getDefaultConfig(): Config {
 		tokenBucketMaxTokens: 50,
 		tokenBucketRefillPerMinute: 6,
 		tokenBucketInitialTokens: 50,
+		streamRecoveryMaxRetries: 2,
 	});
 }

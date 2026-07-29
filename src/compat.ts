@@ -278,6 +278,23 @@ function writeResponsesEvent(
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
+function writeCompatStreamError(
+  res: ServerResponse,
+  format: "openai" | "anthropic",
+  message: string,
+): void {
+  if (format === "openai") {
+    res.write(
+      `data: ${JSON.stringify({ error: { message, type: "server_error" } })}\n\n`,
+    );
+    res.write("data: [DONE]\n\n");
+    return;
+  }
+  res.write(
+    `event: error\ndata: ${JSON.stringify({ type: "error", error: { type: "api_error", message } })}\n\n`,
+  );
+}
+
 function summarizeCompatRequest(body: RequestBody): string {
   const request = isRecord(body.request) ? body.request : {};
   const contents = Array.isArray(request.contents) ? request.contents : [];
@@ -408,6 +425,7 @@ async function streamCompatSse(
     ttfbMs: Date.now() - (context?.requestStartMs ?? streamStartMs),
     healthScore: context?.account?.healthScore,
     routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
+    retries: context?.retries,
     compression: getCompressionHeaderOpts(compressionStats),
   });
 
@@ -431,6 +449,7 @@ async function streamCompatSse(
 
   let tailBuffer = "";
   let reqClosed = false;
+  let streamError: string | undefined;
   const closeUpstreamForClient = (): void => {
     reqClosed = true;
     if (!nodeStream.destroyed) nodeStream.destroy();
@@ -465,23 +484,10 @@ async function streamCompatSse(
           if (!responseId && typeof response.responseId === "string")
             responseId = response.responseId;
 
-          const candidates = Array.isArray(response.candidates)
-            ? response.candidates
-            : [];
-          if (candidates.length > 0 && candidates[0]?.content?.parts) {
-            // DEBUG LOGGING to see what Google is actually sending for thinking
-            if (
-              candidates[0].content.parts.some(
-                (p: any) => p.thought === true || p.text,
-              )
-            ) {
-              console.log(
-                `[DEBUG] Received parts:`,
-                JSON.stringify(candidates[0].content.parts),
-              );
-            }
-          }
-          for (const candidate of candidates) {
+            const candidates = Array.isArray(response.candidates)
+              ? response.candidates
+              : [];
+            for (const candidate of candidates) {
             if (
               !isRecord(candidate) ||
               !isRecord(candidate.content) ||
@@ -618,8 +624,9 @@ async function streamCompatSse(
     }
   } catch (err) {
     if (!reqClosed) {
+      streamError = redactSensitive(String(err)).slice(0, 200);
       compatLogger.warn(
-        `Stream read error: ${redactSensitive(String(err)).slice(0, 200)}`,
+        `Stream read error: ${streamError}`,
       );
     }
   } finally {
@@ -628,7 +635,9 @@ async function streamCompatSse(
   }
 
   if (!reqClosed && !res.writableEnded) {
-    if (format === "openai") {
+    if (streamError) {
+      writeCompatStreamError(res, format, streamError);
+    } else if (format === "openai") {
       const openaiFinishReason = toolCallIndex > 0 ? "tool_calls" : "stop";
       res.write(
         `data: ${JSON.stringify({ id, object: "chat.completion.chunk", created, model, choices: [{ index: 0, delta: {}, finish_reason: openaiFinishReason }] })}\n\n`,
@@ -717,6 +726,7 @@ async function streamCompatSse(
     responseId,
     toolCalls: collectedToolCalls,
     rawResponse,
+    streamError,
   };
 }
 
@@ -750,6 +760,7 @@ async function streamResponsesSse(
   let reasoningItemId = "";
   let reasoningDone = false;
   let reqClosed = false;
+  let streamError: string | undefined;
   const closeUpstreamForClient = (): void => {
     reqClosed = true;
     if (!nodeStream.destroyed) nodeStream.destroy();
@@ -767,6 +778,7 @@ async function streamResponsesSse(
     ttfbMs: Date.now() - (context?.requestStartMs ?? streamStartMs),
     healthScore: context?.account?.healthScore,
     routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
+    retries: context?.retries,
     compression: getCompressionHeaderOpts(compressionStats),
   });
 
@@ -1006,8 +1018,9 @@ async function streamResponsesSse(
     }
   } catch (err) {
     if (!reqClosed) {
+      streamError = redactSensitive(String(err)).slice(0, 200);
       compatLogger.warn(
-        `Responses stream read error: ${redactSensitive(String(err)).slice(0, 200)}`,
+        `Responses stream read error: ${streamError}`,
       );
     }
   } finally {
@@ -1022,6 +1035,7 @@ async function streamResponsesSse(
     outputTokens,
     firstByteMs,
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+    streamError,
     rawResponse: {
       id: responseId,
       object: "response",
@@ -1034,7 +1048,13 @@ async function streamResponsesSse(
       },
     },
   };
-  if (!reqClosed && !res.writableEnded) {
+  if (!reqClosed && !res.writableEnded && streamError) {
+    writeResponsesEvent(res, {
+      type: "error",
+      error: { code: "stream_error", message: streamError },
+    });
+    res.end();
+  } else if (!reqClosed && !res.writableEnded) {
     // Close reasoning item if it was never closed mid-stream
     if (reasoningOutputIndex !== -1 && !reasoningDone) {
       writeResponsesEvent(res, {
@@ -1145,7 +1165,7 @@ async function completeResponsesViaRotator(
         rotator,
         body,
         context,
-        response.status,
+        completion.streamError ? 502 : response.status,
         completion,
         undefined,
         options,
@@ -1229,7 +1249,7 @@ async function completeViaRotator(
             rotator,
             body,
             context,
-            response.status,
+            completion.streamError ? 502 : response.status,
             completion,
             undefined,
             options,
@@ -1257,7 +1277,7 @@ async function completeViaRotator(
             rotator,
             body,
             context,
-            response.status,
+            completion.streamError ? 502 : response.status,
             completion,
             undefined,
             options,
@@ -1552,6 +1572,7 @@ export async function handleGeminiGenerateContent(
     healthScore: result.context?.account?.healthScore,
     routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
     idempotencyHit: result.isDeduplicated,
+    retries: result.context?.retries,
     compression: getCompressionHeaderOpts(result.compressionStats),
   });
   writeJson(res, 200, {
@@ -1668,6 +1689,7 @@ export async function handleOpenAIChatCompletions(
     healthScore: result.context?.account?.healthScore,
     routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
     idempotencyHit: result.isDeduplicated,
+    retries: result.context?.retries,
   });
   writeJson(res, 200, {
     id: `chatcmpl-${started.toString(36)}`,
@@ -1883,6 +1905,7 @@ export async function handleOpenAIResponsesCreate(
     healthScore: result.context?.account?.healthScore,
     routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
     idempotencyHit: result.isDeduplicated,
+    retries: result.context?.retries,
   });
   writeJson(res, 200, responseObject, rotatorHeaders);
 }
@@ -2085,6 +2108,7 @@ export async function handleAnthropicMessages(
     healthScore: result.context?.account?.healthScore,
     routingPolicy: rotator?.getConfig?.()?.routingPolicy || "timer-first",
     idempotencyHit: result.isDeduplicated,
+    retries: result.context?.retries,
   });
   writeJson(res, 200, {
     id: `msg_${started.toString(36)}`,

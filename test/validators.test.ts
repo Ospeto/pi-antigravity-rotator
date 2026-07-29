@@ -52,6 +52,7 @@ describe("validators", () => {
 			tokenBucketMaxTokens: 50,
 			tokenBucketRefillPerMinute: 6,
 			tokenBucketInitialTokens: 20,
+			streamRecoveryMaxRetries: 2,
 			accounts: [validAccount],
 		});
 		assert.equal(result.ok, true);
@@ -81,6 +82,17 @@ describe("validators", () => {
 		assert.match(message, /requestsPerRotation/);
 		assert.match(message, /rotateOnQuotaDrop/);
 		assert.match(message, /accounts\[0\]\.email/);
+	});
+
+	it("requires stream recovery retries to be a non-negative integer", () => {
+		for (const value of [-1, 1.5, "2"]) {
+			const result = validateConfig({
+				accounts: [],
+				streamRecoveryMaxRetries: value,
+			});
+			assert.equal(result.ok, false);
+			assert.match(formatValidationErrors(result.errors), /streamRecoveryMaxRetries/);
+		}
 	});
 
 	it("accepts minimal proxy request body", () => {

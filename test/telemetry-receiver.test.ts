@@ -91,6 +91,22 @@ describe("telemetry receiver", () => {
 		assert.equal(res.status, 401);
 	});
 
+	it("serves a public stats page without authentication", async () => {
+		const res = await fetch(`http://127.0.0.1:${port}/stats`);
+		assert.equal(res.status, 200);
+		assert.match(res.headers.get("content-type") || "", /text\/html/);
+		assert.equal(res.headers.get("cache-control"), "no-cache");
+
+		const html = await res.text();
+		assert.match(html, /fetch\("\/v1\/public-stats"/);
+		assert.match(html, /5 \* 60 \* 1000/);
+		assert.match(html, /Installations/);
+		assert.match(html, /Requests routed/);
+		assert.match(html, /Estimated savings/);
+		assert.match(html, /Input tokens/);
+		assert.match(html, /Output tokens/);
+	});
+
 	it("calculates estimated savings for gemini 3.6 flash models in /v1/stats", async () => {
 		const payload = {
 			event: "heartbeat",
