@@ -2695,7 +2695,7 @@ function renderBenchmarkResults(results, summary) {
       return (
         "<tr>" +
         '<td style="padding:7px 8px;font-family:monospace">' +
-        escapeHtml(result.account) +
+         escapeHtml(maskText(result.account)) +
         "</td>" +
         '<td style="padding:7px 8px;color:' +
         color +

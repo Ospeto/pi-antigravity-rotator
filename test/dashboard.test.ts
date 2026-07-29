@@ -4,13 +4,17 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Script } from "node:vm";
-import { serveDashboard } from "../src/dashboard.js";
+import {
+  serveDashboard,
+  serveDashboardKeys,
+  serveDashboardLogs,
+} from "../src/dashboard.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-function renderDashboard(): string {
+function renderPage(servePage: (res: never) => void): string {
   let html = "";
-  serveDashboard({
+  servePage({
     writeHead() {},
     end(chunk: string) {
       html += chunk;
@@ -19,9 +23,28 @@ function renderDashboard(): string {
   return html;
 }
 
+function renderDashboard(): string {
+  return renderPage(serveDashboard);
+}
+
+function renderDashboardKeys(): string {
+  return renderPage(serveDashboardKeys);
+}
+
+function renderDashboardLogs(): string {
+  return renderPage(serveDashboardLogs);
+}
+
 function readDashboardJs(): string {
   return readFileSync(
     join(__dirname, "..", "src", "static", "dashboard.js"),
+    "utf-8",
+  );
+}
+
+function readDashboardCss(): string {
+  return readFileSync(
+    join(__dirname, "..", "src", "static", "dashboard.css"),
     "utf-8",
   );
 }
@@ -81,6 +104,59 @@ describe("dashboard", () => {
     assert.match(html, /name="viewport".*content="width=device-width/i);
   });
 
+  it("includes the accounts control-room shell", () => {
+    const html = renderDashboard();
+    assert.match(html, /<body class="accounts-page">/);
+    assert.match(html, /class="accounts-dashboard"/);
+    assert.match(html, /class="dashboard-intro"/);
+    assert.match(html, /class="dashboard-live-chip"/);
+    assert.match(html, /dashboard-refresh-btn/);
+  });
+
+  it("includes control-room shells for virtual keys and spend logs", () => {
+    const keysHtml = renderDashboardKeys();
+    const logsHtml = renderDashboardLogs();
+
+    assert.match(keysHtml, /<body class="keys-page">/);
+    assert.match(keysHtml, /class="keys-workspace"/);
+    assert.match(keysHtml, /Access \/ Credentials/);
+    assert.match(keysHtml, /class="workspace-live-chip"/);
+    assert.match(keysHtml, /keySearchInput/);
+
+    assert.match(logsHtml, /<body class="logs-page">/);
+    assert.match(logsHtml, /class="logs-workspace"/);
+    assert.match(logsHtml, /Observability \/ Spend telemetry/);
+    assert.match(logsHtml, /class="logs-filter-heading"/);
+    assert.match(logsHtml, /logsTable/);
+  });
+
+  it("keeps the accounts title readable and the desktop grid dense", () => {
+    const css = readDashboardCss();
+    const titleRule = css.match(/\.accounts-page \.header h1\s*{([^}]*)}/)?.[1];
+    const gradientRule = css.match(
+      /@supports\s*\(\s*background-clip:\s*text\s*\)\s+or\s+\(\s*-webkit-background-clip:\s*text\s*\)[\s\S]*?\.accounts-page \.header h1\s*{([^}]*)}/,
+    )?.[1];
+    const gridRule = css.match(/\.accounts-page \.accounts-grid\s*{([^}]*)}/)?.[1];
+    const dashboardRule = css.match(/\.accounts-page \.accounts-dashboard\s*{([^}]*)}/)?.[1];
+
+    assert.ok(titleRule, "accounts title rule not found");
+    assert.match(titleRule, /background:\s*#f4f2ff/);
+    assert.match(titleRule, /color:\s*#f4f2ff/);
+    assert.match(titleRule, /-webkit-text-fill-color:\s*#f4f2ff/);
+
+    assert.ok(gradientRule, "accounts title gradient rule not found");
+    assert.match(gradientRule, /background:\s*linear-gradient\(135deg,\s*#fff,\s*#b8a9ff\)/);
+    assert.match(gradientRule, /-webkit-background-clip:\s*text/);
+    assert.match(gradientRule, /background-clip:\s*text/);
+    assert.match(gradientRule, /-webkit-text-fill-color:\s*transparent/);
+
+    assert.ok(gridRule, "accounts grid rule not found");
+    assert.match(gridRule, /grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(min\(100%,\s*300px\),\s*1fr\)\)/);
+
+    assert.ok(dashboardRule, "accounts dashboard rule not found");
+    assert.match(dashboardRule, /max-width:\s*none/);
+  });
+
   it("references all documented admin API endpoints", () => {
     const js = readDashboardJs();
     const endpoints = [
@@ -112,6 +188,11 @@ describe("dashboard", () => {
     assert.match(html, /benchmarkBtn/);
     assert.match(js, /function runBenchmark\(\)/);
     assert.match(js, /benchmarkResults/);
+  });
+
+  it("applies PII masking to account benchmark rows", () => {
+    const js = readDashboardJs();
+    assert.match(js, /escapeHtml\(maskText\(result\.account\)\)/);
   });
 
   it("embeds the escapeHtml and jsString helpers used to defend against XSS", () => {

@@ -482,7 +482,7 @@ function renderAppShell(opts: {
 <title>${pageTitle}</title>
 <link rel="stylesheet" href="/static/dashboard.css">
 </head>
-<body>
+<body class="${opts.activeTab}-page">
 
 <div class="update-banner" id="updateBanner">
   <span class="update-badge" id="updateBadgeLabel">NEW</span>
@@ -619,7 +619,20 @@ const DASHBOARD_HTML = renderAppShell({
   title: "Pi Antigravity Rotator",
   activeTab: "accounts",
   scriptSrc: "/static/dashboard.js",
-  contentHtml: `
+contentHtml: `
+<div class="accounts-dashboard">
+<div class="dashboard-intro">
+  <div>
+    <div class="dashboard-kicker">Operations / Account fleet</div>
+    <h2>Keep the fleet moving.</h2>
+    <p>Scan routing health, quota windows and account actions from one focused control room.</p>
+  </div>
+  <div class="dashboard-intro-actions">
+    <span class="dashboard-live-chip"><span class="dashboard-live-dot"></span>Live polling</span>
+    <button class="btn-secondary dashboard-refresh-btn" onclick="refresh()">Refresh now</button>
+  </div>
+</div>
+
 <div class="view-toggle-bar">
   <button class="view-tab active" id="viewTabGrid" onclick="switchView('grid')">⊞ Grid</button>
   <button class="view-tab" id="viewTabList" onclick="switchView('list')">☰ List</button>
@@ -706,6 +719,8 @@ const DASHBOARD_HTML = renderAppShell({
 
 <div class="events-panel" id="recentEventsPanel" style="display:none"></div>
 
+</div>
+
 <div class="modal" id="configEditorModal" onclick="closeModal(event, 'configEditorModal')">
   <div class="modal-card" onclick="event.stopPropagation()" style="max-width: 960px; width: min(960px, 92vw);">
     <div class="modal-header">
@@ -745,18 +760,23 @@ const DASHBOARD_KEYS_HTML = renderAppShell({
   activeTab: "keys",
   scriptSrc: "/static/dashboard-keys.js",
   contentHtml: `
-<div class="page-header-bar">
-  <div class="page-title-group">
+<div class="keys-workspace">
+<div class="workspace-intro">
+  <div>
+    <div class="workspace-kicker">Access / Credentials</div>
     <h2>Virtual Keys &amp; Access Control</h2>
-    <p>Manage API credentials, agent assignments, and per-model authorization rules</p>
+    <p>Manage API credentials, agent assignments, and per-model authorization rules from one operator workspace.</p>
   </div>
-  <button class="btn-modal-submit" onclick="showGenerateModal()" style="display:inline-flex;align-items:center;gap:8px">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-    Generate Virtual Key
-  </button>
+  <div class="workspace-intro-actions">
+    <span class="workspace-live-chip"><span class="workspace-live-dot"></span>Registry live</span>
+    <button class="btn-modal-submit workspace-primary-action" onclick="showGenerateModal()" style="display:inline-flex;align-items:center;gap:8px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      Generate Virtual Key
+    </button>
+  </div>
 </div>
 
-<div class="stats-summary-grid">
+<div class="stats-summary-grid keys-stats">
   <div class="summary-card">
     <div class="summary-card-header">
       <span>Total Credentials</span>
@@ -802,8 +822,8 @@ const DASHBOARD_KEYS_HTML = renderAppShell({
   </div>
 </div>
 
-<div class="list-panel">
-  <div class="list-toolbar">
+<div class="list-panel keys-list-panel">
+  <div class="list-toolbar keys-list-toolbar">
     <span class="list-toolbar-label">Virtual Keys</span>
     <div class="filter-input-group" style="width:260px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -833,6 +853,7 @@ const DASHBOARD_KEYS_HTML = renderAppShell({
       <tbody id="keysTbody"></tbody>
     </table>
   </div>
+</div>
 </div>
 
 <div id="keyModal" class="modal" onclick="if(event.target===this) hideModal()">
@@ -941,14 +962,20 @@ const DASHBOARD_LOGS_HTML = renderAppShell({
   activeTab: "logs",
   scriptSrc: "/static/dashboard-logs.js",
   contentHtml: `
-<div class="page-header-bar">
-  <div class="page-title-group">
+<div class="logs-workspace">
+<div class="workspace-intro">
+  <div>
+    <div class="workspace-kicker">Observability / Spend telemetry</div>
     <h2>Spend Logs &amp; Usage Analytics</h2>
-    <p>Real-time audit trail of requests, prompt/completion tokens, latency metrics, and payload inspector</p>
+    <p>Trace request cost, token flow, latency, and payload context through a focused audit console.</p>
+  </div>
+  <div class="workspace-intro-actions">
+    <span class="workspace-live-chip"><span class="workspace-live-dot"></span>Live audit</span>
+    <button class="btn-secondary workspace-refresh-action" onclick="loadLogs(0)">Refresh logs</button>
   </div>
 </div>
 
-<div class="stats-summary-grid">
+<div class="stats-summary-grid logs-stats">
   <div class="summary-card">
     <div class="summary-card-header">
       <span>Total Requests</span>
@@ -1005,9 +1032,16 @@ const DASHBOARD_LOGS_HTML = renderAppShell({
   </div>
 </div>
 
-<div id="byKeySummary"></div>
+<div id="byKeySummary" class="logs-by-key-summary"></div>
 
-<div class="filter-panel">
+<div class="filter-panel logs-filter-panel">
+  <div class="logs-filter-heading">
+    <div>
+      <span class="logs-filter-kicker">Query console</span>
+      <strong>Filter request history</strong>
+    </div>
+    <span>Use filters to narrow the audit window, then expand any row for payload context.</span>
+  </div>
   <div class="multiselect-container" id="keyMultiselectContainer">
     <div class="multiselect-trigger" id="keyMultiselectTrigger" onclick="toggleMultiselect(event, 'key')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -1105,7 +1139,7 @@ const DASHBOARD_LOGS_HTML = renderAppShell({
   </div>
 </div>
 
-<div class="list-panel">
+<div class="list-panel logs-list-panel">
   <div style="overflow-x:auto">
     <table id="logsTable" class="compact-table">
       <thead>
@@ -1127,6 +1161,7 @@ const DASHBOARD_LOGS_HTML = renderAppShell({
   </div>
 </div>
 
-<div id="pagination" style="margin-top:16px;display:flex;justify-content:center;align-items:center;gap:8px;font-size:0.85rem"></div>
+<div id="pagination" class="logs-pagination" style="margin-top:16px;display:flex;justify-content:center;align-items:center;gap:8px;font-size:0.85rem"></div>
+</div>
 `,
 });
