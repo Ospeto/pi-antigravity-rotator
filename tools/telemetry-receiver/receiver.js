@@ -1374,90 +1374,309 @@ tr:last-child td{border-bottom:none}
 .p-info .preview-title{color:#63b3ed}
 .p-warning .preview-title{color:#fbbf24}
 .p-critical .preview-title{color:#fc8181}
-.version-hint{font-size:10px;color:#4a5568;margin-top:2px}
-@media(max-width:700px){.form-grid{grid-template-columns:1fr}}
+ .version-hint{font-size:10px;color:#4a5568;margin-top:2px}
+ @media(max-width:700px){.form-grid{grid-template-columns:1fr}}
+</style>
+<style>
+:root{color-scheme:dark;--bg:#0b0f17;--panel:#141b29;--panel-2:#192235;--line:#29364b;--muted:#7d8ca5;--text:#e8eef8;--blue:#78b7ff;--green:#72dfa0;--yellow:#f6d365;--red:#ff8b8b}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:radial-gradient(circle at 20% -10%,#1c304b 0,#0f1117 38rem);color:var(--text);min-height:100vh}
+button,input,textarea,select{font:inherit}
+button{border:0}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+a{color:inherit}
+.topbar{border-bottom:1px solid rgba(125,140,165,.18);background:rgba(11,15,23,.72);backdrop-filter:blur(14px)}
+.topbar-inner{max-width:1240px;margin:0 auto;padding:17px 28px;display:flex;align-items:center;gap:24px}
+.brand{display:flex;align-items:center;gap:11px;text-decoration:none;min-width:0}
+.brand-mark{width:31px;height:31px;border-radius:10px;background:linear-gradient(135deg,#78b7ff,#8b7dff);box-shadow:0 0 24px rgba(120,183,255,.25);position:relative;flex-shrink:0}
+.brand-mark:after{content:'';position:absolute;width:9px;height:9px;border-radius:50%;background:#fff;left:11px;top:11px;box-shadow:0 0 0 4px rgba(255,255,255,.2)}
+.brand strong{display:block;color:#fff;font-size:14px;letter-spacing:.01em}
+.brand small{display:block;color:var(--muted);font-size:10px;letter-spacing:.08em;text-transform:uppercase;margin-top:2px}
+.nav{margin-left:auto;display:flex;align-items:center;gap:7px}
+.nav a,.nav-lock{color:var(--muted);font-size:12px;text-decoration:none;padding:7px 10px;border-radius:7px;transition:color .2s,background .2s}
+.nav a:hover{color:#fff;background:rgba(255,255,255,.07)}
+.nav-lock{color:var(--green);background:rgba(114,223,160,.08);font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.auth-strip{border-bottom:1px solid rgba(125,140,165,.18);background:rgba(20,27,41,.76)}
+.auth-inner{max-width:1240px;margin:0 auto;padding:18px 28px;display:flex;align-items:center;justify-content:space-between;gap:24px}
+.auth-kicker,.eyebrow,.section-kicker{color:var(--blue);font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+.auth-title{color:#fff;font-size:16px;font-weight:700;margin-top:4px}
+.auth-note{color:var(--muted);font-size:12px;margin-top:3px}
+.auth-controls{display:flex;align-items:center;gap:12px;min-width:min(100%,500px)}
+.connection{display:flex;align-items:center;gap:7px;white-space:nowrap;color:var(--muted);font-size:11px;font-weight:600}
+.connection-dot{width:8px;height:8px;border-radius:50%;background:#59677d;box-shadow:0 0 0 4px rgba(89,103,125,.12)}
+.connection.connected{color:var(--green)}
+.connection.connected .connection-dot{background:var(--green);box-shadow:0 0 0 4px rgba(114,223,160,.12)}
+.connection.connecting{color:var(--yellow)}
+.connection.connecting .connection-dot{background:var(--yellow);box-shadow:0 0 0 4px rgba(246,211,101,.12);animation:pulse 1.2s ease-in-out infinite}
+.connection.error{color:var(--red)}
+.connection.error .connection-dot{background:var(--red);box-shadow:0 0 0 4px rgba(255,139,139,.12)}
+.token-form{display:flex;gap:8px;flex:1}
+.token-form input{width:100%;min-width:0;background:#0b1019;border:1px solid var(--line);border-radius:8px;padding:9px 12px;color:var(--text);font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.token-form input::placeholder{color:#56657c}
+.token-form input:focus{border-color:var(--blue);outline:none;box-shadow:0 0 0 3px rgba(120,183,255,.12)}
+.page{max-width:1240px;margin:0 auto;padding:38px 28px 64px}
+.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:25px}
+.hero h1{color:#fff;font-size:clamp(28px,4vw,43px);line-height:1.05;letter-spacing:-.045em;margin:10px 0}
+.hero p{max-width:630px;color:#91a0b7;font-size:14px;line-height:1.6}
+.hero-actions{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.sync-note{color:var(--muted);font-size:11px;white-space:nowrap}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.metric{position:relative;overflow:hidden;background:linear-gradient(145deg,rgba(25,34,53,.92),rgba(17,24,38,.92));border:1px solid var(--line);border-radius:13px;padding:17px 18px;min-height:105px}
+.metric:after{content:'';position:absolute;width:80px;height:80px;border-radius:50%;right:-32px;bottom:-40px;background:var(--metric-color,#78b7ff);opacity:.08;filter:blur(4px)}
+.metric-label{color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.metric-value{color:#fff;font-size:28px;font-weight:800;letter-spacing:-.04em;margin-top:11px}
+.metric-sub{color:#61718a;font-size:10px;margin-top:3px}
+.metric.blue{--metric-color:var(--blue)}.metric.green{--metric-color:var(--green)}.metric.yellow{--metric-color:var(--yellow)}.metric.red{--metric-color:var(--red)}
+.metric.blue .metric-value{color:var(--blue)}.metric.green .metric-value{color:var(--green)}.metric.yellow .metric-value{color:var(--yellow)}.metric.red .metric-value{color:var(--red)}
+.flash{border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:12px;line-height:1.4}
+.error{background:rgba(255,139,139,.1);border:1px solid rgba(255,139,139,.32);color:var(--red)}
+.success{background:rgba(114,223,160,.1);border:1px solid rgba(114,223,160,.3);color:var(--green)}
+.workspace{display:grid;grid-template-columns:minmax(0,1.18fr) minmax(320px,.82fr);gap:16px;align-items:start;margin-bottom:18px}
+.panel{background:rgba(20,27,41,.9);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 45px rgba(0,0,0,.12)}
+.compose-panel{padding:22px}
+.panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px}
+.panel-title{color:#fff;font-size:18px;letter-spacing:-.02em;margin-top:6px}
+.panel-description{color:var(--muted);font-size:12px;line-height:1.5;margin-top:5px}
+.mode-pill,.count-pill{display:inline-flex;align-items:center;justify-content:center;border:1px solid rgba(120,183,255,.28);border-radius:999px;padding:5px 9px;color:var(--blue);background:rgba(120,183,255,.09);font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+.count-pill{padding:4px 8px;font-size:10px;color:var(--muted);background:rgba(125,140,165,.1);border-color:rgba(125,140,165,.2);letter-spacing:.02em;text-transform:none}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:17px 13px}
+.form-group{display:flex;flex-direction:column;gap:6px;min-width:0}
+.form-group.full{grid-column:1/-1}
+.form-group label{color:#a9b6c9;font-size:11px;font-weight:700;letter-spacing:.04em}
+.form-group input,.form-group textarea,.form-group select{width:100%;background:#0c121d;border:1px solid var(--line);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;transition:border-color .2s,box-shadow .2s}
+.form-group input::placeholder,.form-group textarea::placeholder{color:#56657c}
+.form-group input:focus,.form-group textarea:focus,.form-group select:focus{border-color:var(--blue);outline:none;box-shadow:0 0 0 3px rgba(120,183,255,.1)}
+.form-group textarea{min-height:116px;resize:vertical;line-height:1.5}
+.field-meta{display:flex;justify-content:space-between;gap:12px;color:#5f7089;font-size:10px;margin-top:-1px}
+.form-divider{grid-column:1/-1;display:flex;align-items:center;gap:10px;color:#62728a;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;margin:1px 0 -3px}
+.form-divider:after{content:'';height:1px;background:var(--line);flex:1}
+.form-actions{display:flex;align-items:center;gap:9px;margin-top:3px;grid-column:1/-1}
+.btn-primary,.btn-secondary,.btn-ghost,.btn-danger,.btn-edit{border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;transition:background .2s,border-color .2s,color .2s,transform .2s}
+.btn-primary{background:var(--blue);color:#08111d;padding:10px 17px;box-shadow:0 8px 22px rgba(120,183,255,.16)}
+.btn-primary:hover{background:#9bcaff;transform:translateY(-1px)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.btn-secondary{background:#26334a;color:#b5c3d6;padding:10px 15px}
+.btn-secondary:hover{background:#33435c;color:#fff}
+.btn-ghost{background:rgba(120,183,255,.08);border:1px solid rgba(120,183,255,.25);color:var(--blue);padding:8px 12px}
+.btn-ghost:hover{background:rgba(120,183,255,.15);border-color:rgba(120,183,255,.5)}
+.btn-danger{background:rgba(255,139,139,.08);border:1px solid rgba(255,139,139,.24);color:var(--red);padding:7px 10px}
+.btn-danger:hover{background:rgba(255,139,139,.17);border-color:rgba(255,139,139,.46)}
+.btn-edit{background:rgba(120,183,255,.08);border:1px solid rgba(120,183,255,.24);color:var(--blue);padding:7px 10px}
+.btn-edit:hover{background:rgba(120,183,255,.16);border-color:rgba(120,183,255,.46)}
+.preview-panel{position:sticky;top:18px;padding:22px}
+.preview-panel .panel-head{margin-bottom:16px}
+.preview-shell{background:#0b1019;border:1px solid #233047;border-radius:12px;padding:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
+.preview-chrome{display:flex;align-items:center;gap:5px;padding:3px 5px 10px}
+.preview-chrome i{width:6px;height:6px;border-radius:50%;background:#405069}
+.preview-chrome span{margin-left:6px;color:#52627a;font-size:9px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.preview-card{border-radius:10px;padding:19px;display:flex;align-items:flex-start;gap:13px;min-height:164px;transition:background .2s,border-color .2s}
+.preview-card.p-info{background:linear-gradient(145deg,rgba(66,153,225,.16),rgba(27,46,72,.55));border:1px solid rgba(120,183,255,.38)}
+.preview-card.p-warning{background:linear-gradient(145deg,rgba(246,211,101,.14),rgba(62,54,30,.55));border:1px solid rgba(246,211,101,.4)}
+.preview-card.p-critical{background:linear-gradient(145deg,rgba(255,139,139,.14),rgba(65,35,42,.55));border:1px solid rgba(255,139,139,.4)}
+.preview-icon{width:29px;height:29px;display:inline-flex;align-items:center;justify-content:center;border-radius:9px;background:rgba(255,255,255,.12);color:#fff;font-weight:800;font-size:14px;flex-shrink:0}
+.preview-content{flex:1;min-width:0}
+.preview-eyebrow{color:#7890ac;font-size:9px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;margin-bottom:7px}
+.preview-title{font-weight:800;font-size:16px;line-height:1.25;margin-bottom:6px;color:#fff;overflow-wrap:anywhere}
+.preview-msg{font-size:12px;color:#a9b7ca;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+.preview-action{display:inline-flex;margin-top:13px;padding:6px 10px;border-radius:7px;font-size:11px;font-weight:700;text-decoration:none;border:1px solid rgba(255,255,255,.16);color:#e8eef8;background:rgba(255,255,255,.07)}
+.p-info .preview-title{color:#9bcaff}.p-warning .preview-title{color:#f6d365}.p-critical .preview-title{color:#ffaaaa}
+.preview-details{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.preview-detail{background:rgba(255,255,255,.035);border:1px solid rgba(125,140,165,.13);border-radius:8px;padding:9px 10px}
+.preview-detail span{display:block;color:#63728a;font-size:9px;text-transform:uppercase;letter-spacing:.08em;font-weight:800}
+.preview-detail strong{display:block;color:#b7c4d5;font-size:11px;margin-top:4px;font-weight:600;overflow-wrap:anywhere}
+.preview-note{color:#63728a;font-size:10px;line-height:1.45;margin-top:12px}
+.list-panel{padding:22px}
+.list-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}
+.list-head h2{display:flex;align-items:center;gap:9px;color:#fff;font-size:18px;letter-spacing:-.02em;margin-top:6px}
+.list-head p{color:var(--muted);font-size:12px;margin-top:5px}
+.list-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.search-wrap{position:relative;flex:1;min-width:190px}
+.search-wrap input,.list-tools select{width:100%;background:#0c121d;border:1px solid var(--line);border-radius:8px;padding:9px 11px;color:var(--text);font-size:12px}
+.search-wrap input::placeholder{color:#56657c}
+.list-tools select{width:auto;min-width:120px}
+.search-wrap input:focus,.list-tools select:focus{border-color:var(--blue);outline:none;box-shadow:0 0 0 3px rgba(120,183,255,.1)}
+.notification-list{display:flex;flex-direction:column;gap:8px}
+.notification-row{display:flex;position:relative;overflow:hidden;background:rgba(11,16,25,.6);border:1px solid #243148;border-radius:11px;transition:border-color .2s,background .2s,transform .2s}
+.notification-row:hover{background:rgba(25,34,53,.7);border-color:#3a4c69;transform:translateY(-1px)}
+.notification-accent{width:3px;background:var(--blue);flex-shrink:0}.notification-row.type-warning .notification-accent{background:var(--yellow)}.notification-row.type-critical .notification-accent{background:var(--red)}
+.notification-main{min-width:0;flex:1;padding:15px 16px}
+.notification-top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.notification-title{color:#fff;font-size:13px;font-weight:750;overflow-wrap:anywhere}
+.notification-message{color:#94a3b8;font-size:12px;line-height:1.5;margin-top:6px;white-space:pre-wrap;overflow-wrap:anywhere}
+.notification-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:11px;color:#667791;font-size:10px}
+.meta-chip{display:inline-flex;align-items:center;gap:4px;background:rgba(125,140,165,.08);border:1px solid rgba(125,140,165,.14);border-radius:999px;padding:4px 7px}
+.type-badge,.status-badge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 8px;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+.type-badge.info{background:rgba(120,183,255,.12);color:var(--blue)}.type-badge.warning{background:rgba(246,211,101,.12);color:var(--yellow)}.type-badge.critical{background:rgba(255,139,139,.12);color:var(--red)}
+.status-badge.active{background:rgba(114,223,160,.1);color:var(--green)}.status-badge.expired{background:rgba(125,140,165,.1);color:#8796ad}
+.notification-actions{display:flex;align-items:center;gap:7px;padding:15px 16px;flex-shrink:0}
+.empty{border:1px dashed #33445e;border-radius:11px;color:#6e7e96;font-size:12px;line-height:1.5;padding:32px 20px;text-align:center}
+.version-hint{color:#5f7089;font-size:10px;font-weight:400;margin-left:3px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@keyframes pulse{50%{opacity:.45}}
+@media(max-width:960px){.auth-inner{align-items:flex-start;flex-direction:column;gap:14px}.auth-controls{width:100%;max-width:none}.workspace{grid-template-columns:1fr}.preview-panel{position:static}.metrics{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:650px){.topbar-inner,.auth-inner,.page{padding-left:17px;padding-right:17px}.topbar-inner{gap:12px}.nav a{display:none}.nav-lock{padding:6px 8px}.page{padding-top:28px}.hero{align-items:flex-start;flex-direction:column;margin-bottom:20px}.hero-actions{width:100%;justify-content:space-between}.metrics{gap:8px}.metric{min-height:92px;padding:14px}.metric-value{font-size:24px}.compose-panel,.preview-panel,.list-panel{padding:17px}.form-grid{grid-template-columns:1fr;gap:15px}.form-divider,.form-group.full,.form-actions{grid-column:auto}.list-head{flex-direction:column;gap:8px}.list-tools{align-items:stretch;flex-direction:column}.search-wrap,.list-tools select{width:100%}.notification-row{display:block}.notification-actions{padding:0 16px 15px}.auth-controls{align-items:stretch;flex-direction:column}.token-form{width:100%}}
 </style>
 </head>
 <body>
-<div class="header">
-  <h1>\u{1f514} Notification Manager</h1>
-  <div class="nav">
-    <a href="/">Telemetry Dashboard</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/notifications">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span><strong>Pi Rotator</strong><small>Operations</small></span>
+    </a>
+    <nav class="nav" aria-label="Operator navigation">
+      <a href="/">Telemetry</a>
+      <a href="/stats">Public stats</a>
+      <span class="nav-lock">Private</span>
+    </nav>
   </div>
-</div>
-<div class="token-bar">
-  <input type="password" id="tok" placeholder="Paste STATS_TOKEN here\u2026" />
-  <button onclick="authenticate()">Connect</button>
-</div>
+</header>
+<section class="auth-strip">
+  <div class="auth-inner">
+    <div>
+      <div class="auth-kicker">Operator access</div>
+      <div class="auth-title">Notification Manager</div>
+      <div class="auth-note">Connect with STATS_TOKEN to publish and manage broadcasts.</div>
+    </div>
+    <div class="auth-controls">
+      <div class="connection" id="connectionState"><span class="connection-dot" id="connectionDot"></span><span id="connectionLabel">Not connected</span></div>
+      <form class="token-form" id="authForm" onsubmit="authenticate(event)">
+        <label class="sr-only" for="tok">STATS_TOKEN</label>
+        <input type="password" id="tok" autocomplete="current-password" placeholder="Paste STATS_TOKEN" />
+        <button class="btn-primary" id="connectBtn" type="submit">Connect</button>
+      </form>
+    </div>
+  </div>
+</section>
 
-<div class="main">
-  <div class="error" id="errMsg" style="display:none"></div>
-  <div class="success" id="successMsg" style="display:none"></div>
+<main class="page">
+  <div class="flash error" id="errMsg" style="display:none"></div>
+  <div class="flash success" id="successMsg" style="display:none"></div>
 
   <div id="authedContent" style="display:none">
-    <div class="section">
-      <h2 id="formTitle">\u2795 Compose New Notification</h2>
-      <div class="form-grid">
-        <input type="hidden" id="editId" value="" />
-        <div class="form-group">
-          <label>Type</label>
-          <select id="nType" onchange="updatePreview()">
-            <option value="info">Info</option>
-            <option value="warning">Warning</option>
-            <option value="critical">Critical</option>
-          </select>
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Operations / Broadcasts</div>
+        <h1>Keep operators in the loop.</h1>
+        <p>Compose clear, targeted announcements for every connected rotator. Preview the client-facing card before it reaches users.</p>
+      </div>
+      <div class="hero-actions">
+        <span class="sync-note" id="lastSync">Not synced</span>
+        <button class="btn-ghost" id="refreshBtn" type="button" onclick="refreshList()">Refresh</button>
+      </div>
+    </section>
+
+    <section class="metrics" aria-label="Notification summary">
+      <article class="metric blue"><div class="metric-label">Total</div><div class="metric-value" id="metricTotal">0</div><div class="metric-sub">All saved broadcasts</div></article>
+      <article class="metric green"><div class="metric-label">Live</div><div class="metric-value" id="metricActive">0</div><div class="metric-sub">Currently deliverable</div></article>
+      <article class="metric yellow"><div class="metric-label">Expiring</div><div class="metric-value" id="metricExpiring">0</div><div class="metric-sub">Have a future expiry</div></article>
+      <article class="metric red"><div class="metric-label">Expired</div><div class="metric-value" id="metricExpired">0</div><div class="metric-sub">Kept for audit history</div></article>
+    </section>
+
+    <div class="workspace">
+      <section class="panel compose-panel" id="composePanel">
+        <div class="panel-head">
+          <div>
+            <div class="section-kicker">Message studio</div>
+            <h2 class="panel-title" id="formTitle">Compose new notification</h2>
+            <p class="panel-description" id="formDescription">Write a concise update, then target the right client versions.</p>
+          </div>
+          <span class="mode-pill" id="formMode">New</span>
         </div>
-        <div class="form-group">
-          <label>Expires At</label>
-          <input type="datetime-local" id="nExpires" />
-        </div>
-        <div class="form-group full">
-          <label>Title</label>
-          <input type="text" id="nTitle" placeholder="Short headline for the notification" oninput="updatePreview()" />
-        </div>
-        <div class="form-group full">
-          <label>Message</label>
-          <textarea id="nMessage" placeholder="Full notification message. Explain what users need to do." oninput="updatePreview()"><\/textarea>
-        </div>
-        <div class="form-group">
-          <label>Min Version <span class="version-hint">(show to users &ge; this version)</span></label>
-          <input type="text" id="nMinVer" placeholder="e.g. 1.0.0" />
-        </div>
-        <div class="form-group">
-          <label>Max Version <span class="version-hint">(show to users &le; this version)</span></label>
-          <input type="text" id="nMaxVer" placeholder="e.g. 1.5.1" />
-        </div>
-        <div class="form-group">
-          <label>Action URL (optional)</label>
-          <input type="text" id="nActionUrl" placeholder="https://github.com/..." oninput="updatePreview()" />
-        </div>
-        <div class="form-group">
-          <label>Action Label (optional)</label>
-          <input type="text" id="nActionLabel" placeholder="e.g. View README" oninput="updatePreview()" />
-        </div>
-        <div class="preview" id="previewArea">
-          <div class="preview-label">Live Preview</div>
-          <div class="preview-card p-info" id="previewCard">
-            <span class="preview-icon" id="previewIcon">\u{2139}\u{fe0f}</span>
-            <div class="preview-content">
-              <div class="preview-title" id="previewTitle">Notification title</div>
-              <div class="preview-msg" id="previewMsg">Notification message will appear here</div>
+        <form id="notificationForm" onsubmit="submitNotification(event)">
+          <div class="form-grid">
+            <input type="hidden" id="editId" value="" />
+            <div class="form-group">
+              <label for="nType">Severity</label>
+              <select id="nType" onchange="updatePreview()">
+                <option value="info">Info - routine update</option>
+                <option value="warning">Warning - action recommended</option>
+                <option value="critical">Critical - action required</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="nExpires">Expiry <span class="version-hint">optional</span></label>
+              <input type="datetime-local" id="nExpires" onchange="updatePreview()" />
+            </div>
+            <div class="form-group full">
+              <label for="nTitle">Headline</label>
+              <input type="text" id="nTitle" maxlength="2048" placeholder="Short headline for the notification" oninput="updatePreview()" />
+            </div>
+            <div class="form-group full">
+              <label for="nMessage">Message</label>
+              <textarea id="nMessage" maxlength="2048" placeholder="Explain what changed and what users need to do." oninput="updatePreview()"><\/textarea>
+              <div class="field-meta"><span>Shown in the client broadcast banner</span><span id="messageCount">0 / 2048</span></div>
+            </div>
+            <div class="form-divider">Delivery targeting</div>
+            <div class="form-group">
+              <label for="nMinVer">Minimum version <span class="version-hint">inclusive</span></label>
+              <input type="text" id="nMinVer" maxlength="2048" placeholder="e.g. 1.0.0" onchange="updatePreview()" />
+            </div>
+            <div class="form-group">
+              <label for="nMaxVer">Maximum version <span class="version-hint">inclusive</span></label>
+              <input type="text" id="nMaxVer" maxlength="2048" placeholder="e.g. 1.5.1" onchange="updatePreview()" />
+            </div>
+            <div class="form-group">
+              <label for="nActionUrl">Action URL <span class="version-hint">optional</span></label>
+              <input type="text" id="nActionUrl" maxlength="2048" placeholder="https://github.com/..." oninput="updatePreview()" />
+            </div>
+            <div class="form-group">
+              <label for="nActionLabel">Action label <span class="version-hint">optional</span></label>
+              <input type="text" id="nActionLabel" maxlength="2048" placeholder="e.g. View README" oninput="updatePreview()" />
+            </div>
+            <div class="form-actions">
+              <button class="btn-primary" id="btnSubmit" type="submit">Publish notification</button>
+              <button class="btn-secondary" id="btnCancel" type="button" onclick="cancelEdit()" style="display:none">Cancel edit</button>
             </div>
           </div>
+        </form>
+      </section>
+
+      <aside class="panel preview-panel" aria-label="Live notification preview">
+        <div class="panel-head">
+          <div>
+            <div class="section-kicker">Client preview</div>
+            <h2 class="panel-title">This is what users see.</h2>
+          </div>
         </div>
-        <div class="form-actions">
-          <button class="btn-primary" id="btnSubmit" onclick="submitNotification()">Create Notification</button>
-          <button class="btn-secondary" id="btnCancel" onclick="cancelEdit()" style="display:none">Cancel Edit</button>
+        <div class="preview-shell">
+          <div class="preview-chrome"><i></i><i></i><i></i><span>pi rotator / broadcast</span></div>
+          <div class="preview-card p-info" id="previewCard">
+            <span class="preview-icon" id="previewIcon">i</span>
+            <div class="preview-content">
+              <div class="preview-eyebrow" id="previewType">Info update</div>
+              <div class="preview-title" id="previewTitle">Notification title</div>
+              <div class="preview-msg" id="previewMsg">Notification message will appear here.</div>
+              <a class="preview-action" id="previewAction" href="#" onclick="return false" style="display:none">Learn more</a>
+            </div>
+          </div>
+          <div class="preview-details">
+            <div class="preview-detail"><span>Audience</span><strong id="previewAudience">All versions</strong></div>
+            <div class="preview-detail"><span>Availability</span><strong id="previewExpiry">No expiry</strong></div>
+          </div>
         </div>
-      </div>
+        <p class="preview-note">The preview updates as you type. Version targeting is applied when clients poll for active notifications.</p>
+      </aside>
     </div>
 
-    <div class="section">
-      <h2>\u{1f4cb} All Notifications</h2>
-      <div id="notifTable"></div>
-    </div>
+    <section class="panel list-panel">
+      <div class="list-head">
+        <div>
+          <div class="section-kicker">Broadcast library</div>
+          <h2>All notifications <span class="count-pill" id="notifCount">0 shown</span></h2>
+          <p>Review active and historical messages, or edit a broadcast in place.</p>
+        </div>
+      </div>
+      <div class="list-tools">
+        <label class="search-wrap"><span class="sr-only">Search notifications</span><input type="search" id="notifSearch" placeholder="Search title or message..." oninput="renderTable()" /></label>
+        <label><span class="sr-only">Filter by status</span><select id="notifStatus" onchange="renderTable()"><option value="all">All statuses</option><option value="active">Live only</option><option value="expired">Expired only</option></select></label>
+        <label><span class="sr-only">Filter by severity</span><select id="notifTypeFilter" onchange="renderTable()"><option value="all">All severities</option><option value="info">Info</option><option value="warning">Warning</option><option value="critical">Critical</option></select></label>
+        <button class="btn-ghost" type="button" onclick="refreshList()">Sync list</button>
+      </div>
+      <div class="notification-list" id="notifTable"></div>
+    </section>
   </div>
-</div>
+</main>
 
 <script>
 
@@ -1466,7 +1685,14 @@ var _notifications = [];
 
 function $(i) { return document.getElementById(i); }
 
-function authenticate() {
+function setConnection(state, label) {
+  var el = $('connectionState');
+  el.className = 'connection' + (state ? ' ' + state : '');
+  $('connectionLabel').textContent = label;
+}
+
+function authenticate(event) {
+  if (event) event.preventDefault();
   var t = $('tok').value.trim();
   if (!t) return;
   _token = t;
@@ -1475,59 +1701,137 @@ function authenticate() {
 }
 
 async function loadAll() {
+  setConnection('connecting', 'Connecting...');
+  $('connectBtn').disabled = true;
   try {
-    // We need to verify the token by trying to load raw notifications
-    // Use a GET with auth to confirm access
     var r = await fetch('/v1/stats', { headers: { 'Authorization': 'Bearer ' + _token } });
-    if (r.status === 401) { showErr('Invalid token'); return; }
+    if (r.status === 401) throw new Error('Invalid token');
+    if (!r.ok) throw new Error('Unable to connect (HTTP ' + r.status + ')');
     hideErr();
     $('authedContent').style.display = 'block';
-    await refreshList();
-  } catch(e) { showErr(e.message); }
+    if (await refreshList()) setConnection('connected', 'Connected');
+    else setConnection('error', 'Connection failed');
+  } catch(e) {
+    $('authedContent').style.display = 'none';
+    setConnection('error', 'Connection failed');
+    showErr(e.message);
+  } finally {
+    $('connectBtn').disabled = false;
+  }
 }
 
 async function refreshList() {
+  if (!_token) return false;
+  var refreshButton = $('refreshBtn');
+  if (refreshButton) refreshButton.disabled = true;
   try {
-    // Load all notifications from the file (we'll load the full list including expired)
     var r = await fetch('/v1/notifications?all=true', {
       headers: { 'Authorization': 'Bearer ' + _token }
     });
-    if (!r.ok) { showErr('Failed to load notifications'); return; }
+    if (r.status === 401) {
+      $('authedContent').style.display = 'none';
+      setConnection('error', 'Session expired');
+      throw new Error('Session expired. Connect again.');
+    }
+    if (!r.ok) throw new Error('Failed to load notifications (HTTP ' + r.status + ')');
     _notifications = await r.json();
     renderTable();
-  } catch(e) { showErr(e.message); }
+    updateOverview();
+    $('lastSync').textContent = 'Synced ' + new Date().toLocaleTimeString();
+    return true;
+  } catch(e) {
+    showErr(e.message);
+    return false;
+  } finally {
+    if (refreshButton) refreshButton.disabled = false;
+  }
+}
+
+function isExpired(n, now) {
+  if (!n.expiresAt) return false;
+  var timestamp = Date.parse(n.expiresAt);
+  return Number.isFinite(timestamp) && timestamp <= now;
+}
+
+function formatDate(value) {
+  if (!value) return 'Unknown date';
+  var date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'Unknown date' : date.toLocaleString();
+}
+
+function audienceLabel(n) {
+  if (n.minVersion && n.maxVersion) return 'v' + n.minVersion + ' - v' + n.maxVersion;
+  if (n.minVersion) return 'v' + n.minVersion + ' and newer';
+  if (n.maxVersion) return 'Up to v' + n.maxVersion;
+  return 'All versions';
+}
+
+function updateOverview() {
+  var now = Date.now();
+  var expired = _notifications.filter(function(n) { return isExpired(n, now); }).length;
+  var expiring = _notifications.filter(function(n) { return Boolean(n.expiresAt) && !isExpired(n, now); }).length;
+  $('metricTotal').textContent = _notifications.length;
+  $('metricActive').textContent = _notifications.length - expired;
+  $('metricExpiring').textContent = expiring;
+  $('metricExpired').textContent = expired;
 }
 
 function renderTable() {
   var tb = $('notifTable');
-  if (!_notifications || _notifications.length === 0) {
-    tb.innerHTML = '<div class="empty">No notifications yet. Create one above!</div>';
+  var query = (($('notifSearch') || {}).value || '').trim().toLowerCase();
+  var statusFilter = ($('notifStatus') || {}).value || 'all';
+  var typeFilter = ($('notifTypeFilter') || {}).value || 'all';
+  var now = Date.now();
+  var rows = _notifications.map(function(n, index) { return { notification: n, index: index }; }).filter(function(entry) {
+    var n = entry.notification;
+    var expired = isExpired(n, now);
+    var haystack = [n.title, n.message, n.actionLabel, n.minVersion, n.maxVersion].filter(Boolean).join(' ').toLowerCase();
+    if (query && haystack.indexOf(query) === -1) return false;
+    if (statusFilter === 'active' && expired) return false;
+    if (statusFilter === 'expired' && !expired) return false;
+    if (typeFilter !== 'all' && n.type !== typeFilter) return false;
+    return true;
+  });
+
+  $('notifCount').textContent = rows.length + ' shown';
+  if (rows.length === 0) {
+    tb.innerHTML = _notifications.length === 0
+      ? '<div class="empty">No notifications yet. Compose the first broadcast above.</div>'
+      : '<div class="empty">No notifications match these filters.<br>Try a different search or status.</div>';
     return;
   }
-  var now = new Date().toISOString();
-  var html = '<table><thead><tr><th>Type</th><th>Title</th><th>Message</th><th>Version Target</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>';
-  for (var i = 0; i < _notifications.length; i++) {
-    var n = _notifications[i];
-    var isExpired = n.expiresAt && n.expiresAt < now;
-    var type = ['info','warning','critical'].includes(n.type) ? n.type : 'info';
-    var typeClass = 'type-' + type;
-    var verTarget = '';
-    if (n.minVersion || n.maxVersion) {
-      verTarget = (n.minVersion ? '\u2265' + n.minVersion : '') + (n.minVersion && n.maxVersion ? ' ' : '') + (n.maxVersion ? '\u2264' + n.maxVersion : '');
-    } else {
-      verTarget = 'All';
-    }
-    html += '<tr>'
-      + '<td><span class="type-badge ' + typeClass + '">' + esc(n.type || 'info') + '</span></td>'
-      + '<td><strong>' + esc(n.title) + '</strong></td>'
-      + '<td style="max-width:280px;white-space:pre-wrap;word-break:break-word;font-size:11px;color:#a0aec0">' + esc(n.message).slice(0, 120) + (n.message.length > 120 ? '\u2026' : '') + '</td>'
-      + '<td class="mono">' + esc(verTarget) + '</td>'
-      + '<td><span class="' + (isExpired ? 'status-expired' : 'status-active') + '">' + (isExpired ? 'Expired' : 'Active') + '</span></td>'
-      + '<td class="mono">' + esc(n.createdAt ? n.createdAt.slice(0, 16) : '\u2014') + '</td>'
-      + '<td style="white-space:nowrap"><button class="btn-edit" onclick="editNotif(' + i + ')">Edit</button> <button class="btn-danger" onclick="deleteNotif(\\'' + jsString(n.id) + '\\')">Delete</button></td>'
-      + '</tr>';
-  }
-  html += '</tbody></table>';
+
+  var html = '';
+  rows.forEach(function(entry) {
+    var n = entry.notification;
+    var expired = isExpired(n, now);
+    var type = ['info', 'warning', 'critical'].includes(n.type) ? n.type : 'info';
+    var message = String(n.message || '');
+    var messagePreview = message.length > 220 ? message.slice(0, 220) + '...' : message;
+    var expiry = n.expiresAt ? (expired ? 'Expired ' : 'Expires ') + formatDate(n.expiresAt) : 'No expiry';
+    var action = n.actionUrl ? '<span class="meta-chip">Action: ' + esc(n.actionLabel || 'Open link') + '</span>' : '';
+    html += '<article class="notification-row type-' + type + '">' +
+      '<div class="notification-accent"></div>' +
+      '<div class="notification-main">' +
+        '<div class="notification-top">' +
+          '<div class="notification-title">' + esc(n.title || 'Untitled notification') + '</div>' +
+          '<span class="status-badge ' + (expired ? 'expired' : 'active') + '">' + (expired ? 'Expired' : 'Live') + '</span>' +
+        '</div>' +
+        '<div class="notification-message">' + esc(messagePreview) + '</div>' +
+        '<div class="notification-meta">' +
+          '<span class="type-badge ' + type + '">' + type + '</span>' +
+          '<span class="meta-chip">Audience: ' + esc(audienceLabel(n)) + '</span>' +
+          '<span class="meta-chip">' + esc(expiry) + '</span>' +
+          '<span class="meta-chip">Created ' + esc(formatDate(n.createdAt)) + '</span>' +
+          action +
+        '</div>' +
+      '</div>' +
+      '<div class="notification-actions">' +
+        '<button class="btn-edit" type="button" onclick="editNotif(' + entry.index + ')">Edit</button>' +
+        '<button class="btn-danger" type="button" onclick="deleteNotif(\\'' + jsString(n.id) + '\\')">Delete</button>' +
+      '</div>' +
+    '</article>';
+  });
   tb.innerHTML = html;
 }
 
@@ -1547,11 +1851,13 @@ function editNotif(idx) {
   } else {
     $('nExpires').value = '';
   }
-  $('formTitle').textContent = '\u270f\ufe0f Edit Notification';
-  $('btnSubmit').textContent = 'Update Notification';
+  $('formTitle').textContent = 'Edit notification';
+  $('formDescription').textContent = 'Update the message or delivery rules, then save the revised broadcast.';
+  $('formMode').textContent = 'Editing';
+  $('btnSubmit').textContent = 'Save changes';
   $('btnCancel').style.display = '';
   updatePreview();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  $('composePanel').scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 function cancelEdit() {
@@ -1564,13 +1870,16 @@ function cancelEdit() {
   $('nActionUrl').value = '';
   $('nActionLabel').value = '';
   $('nExpires').value = '';
-  $('formTitle').textContent = '\u2795 Compose New Notification';
-  $('btnSubmit').textContent = 'Create Notification';
+  $('formTitle').textContent = 'Compose new notification';
+  $('formDescription').textContent = 'Write a concise update, then target the right client versions.';
+  $('formMode').textContent = 'New';
+  $('btnSubmit').textContent = 'Publish notification';
   $('btnCancel').style.display = 'none';
   updatePreview();
 }
 
-async function submitNotification() {
+async function submitNotification(event) {
+  if (event) event.preventDefault();
   var title = $('nTitle').value.trim();
   var message = $('nMessage').value.trim();
   if (!title || !message) { showErr('Title and message are required'); return; }
@@ -1589,7 +1898,9 @@ async function submitNotification() {
   var editId = $('editId').value;
   if (editId) payload.id = editId;
 
-  $('btnSubmit').disabled = true;
+  var button = $('btnSubmit');
+  button.disabled = true;
+  button.textContent = editId ? 'Saving changes...' : 'Publishing...';
   try {
     var r = await fetch('/v1/notifications', {
       method: 'POST',
@@ -1606,8 +1917,11 @@ async function submitNotification() {
     }
   } catch(e) {
     showErr(e.message);
+  } finally {
+    button.disabled = false;
+    if ($('editId').value) button.textContent = 'Save changes';
+    else button.textContent = 'Publish notification';
   }
-  $('btnSubmit').disabled = false;
 }
 
 async function deleteNotif(id) {
@@ -1627,7 +1941,8 @@ async function deleteNotif(id) {
   } catch(e) { showErr(e.message); }
 }
 
-var ICONS = { info: '\u{2139}\u{fe0f}', warning: '\u26a0\ufe0f', critical: '\u{1f6a8}' };
+var ICONS = { info: 'i', warning: '!', critical: '!' };
+var TYPE_LABELS = { info: 'Info update', warning: 'Warning', critical: 'Critical alert' };
 
 function updatePreview() {
   var type = $('nType').value;
@@ -1638,10 +1953,27 @@ function updatePreview() {
   var card = $('previewCard');
   card.className = 'preview-card p-' + type;
   $('previewIcon').textContent = ICONS[type] || ICONS.info;
+  $('previewType').textContent = TYPE_LABELS[type] || TYPE_LABELS.info;
   $('previewTitle').textContent = title;
-  var html = esc(msg);
-  if (actionUrl) html += '<br/><a class="preview-btn" href="#" onclick="return false">' + esc(actionLabel) + '</a>';
-  $('previewMsg').innerHTML = html;
+  $('previewMsg').textContent = msg;
+  var action = $('previewAction');
+  action.textContent = actionLabel;
+  action.href = /^https?:\\/\\//i.test(actionUrl) ? actionUrl : '#';
+  action.style.display = actionUrl ? 'inline-flex' : 'none';
+  var minVersion = $('nMinVer').value.trim();
+  var maxVersion = $('nMaxVer').value.trim();
+  if (minVersion && maxVersion) $('previewAudience').textContent = 'v' + minVersion + ' - v' + maxVersion;
+  else if (minVersion) $('previewAudience').textContent = 'v' + minVersion + ' and newer';
+  else if (maxVersion) $('previewAudience').textContent = 'Up to v' + maxVersion;
+  else $('previewAudience').textContent = 'All versions';
+  var expiry = $('nExpires').value;
+  $('previewExpiry').textContent = expiry ? formatDate(new Date(expiry).toISOString()) : 'No expiry';
+  updateMessageCount();
+}
+
+function updateMessageCount() {
+  var message = $('nMessage').value || '';
+  $('messageCount').textContent = message.length + ' / 2048';
 }
 
 function esc(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
@@ -1652,14 +1984,15 @@ function jsString(s) {
     .replace(/\\r/g, '\\\\r')
     .replace(/\\n/g, '\\\\n'));
 }
-function showErr(m) { $('errMsg').textContent = '\u26a0 ' + m; $('errMsg').style.display = ''; setTimeout(function(){ $('errMsg').style.display='none'; }, 8000); }
+function showErr(m) { $('errMsg').textContent = 'Error: ' + m; $('errMsg').style.display = ''; setTimeout(function(){ $('errMsg').style.display='none'; }, 8000); }
 function hideErr() { $('errMsg').style.display = 'none'; }
-function showSuccess(m) { $('successMsg').textContent = '\u2713 ' + m; $('successMsg').style.display = ''; setTimeout(function(){ $('successMsg').style.display='none'; }, 4000); }
+function showSuccess(m) { $('successMsg').textContent = 'Saved: ' + m; $('successMsg').style.display = ''; setTimeout(function(){ $('successMsg').style.display='none'; }, 4000); }
 
 // Auto-connect from saved token
 var saved = localStorage.getItem('notif_token');
 if (saved) { _token = saved; $('tok').value = saved; loadAll(); }
 updatePreview();
+updateMessageCount();
 <\/script>
 </body></html>`;
 }

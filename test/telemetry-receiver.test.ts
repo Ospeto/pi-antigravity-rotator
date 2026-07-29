@@ -107,6 +107,23 @@ describe("telemetry receiver", () => {
 		assert.match(html, /Output tokens/);
 	});
 
+	it("serves the redesigned notification manager shell", async () => {
+		const res = await fetch(`http://127.0.0.1:${port}/notifications`);
+		assert.equal(res.status, 200);
+		assert.match(res.headers.get("content-type") || "", /text\/html/);
+
+		const html = await res.text();
+		assert.match(html, /Notification Manager/);
+		assert.match(html, /id="connectionState"/);
+		assert.match(html, /id="previewCard"/);
+		assert.match(html, /id="notifSearch"/);
+		assert.match(html, /v1\/notifications\?all=true/);
+
+		const script = html.match(/<script>\n([\s\S]*?)\n<\/script>/)?.[1];
+		assert.ok(script);
+		assert.doesNotThrow(() => new Function(script));
+	});
+
 	it("calculates estimated savings for gemini 3.6 flash models in /v1/stats", async () => {
 		const payload = {
 			event: "heartbeat",
