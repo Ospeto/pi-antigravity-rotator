@@ -124,6 +124,25 @@ describe("telemetry receiver", () => {
 		assert.doesNotThrow(() => new Function(script));
 	});
 
+	it("serves the redesigned telemetry dashboard shell", async () => {
+		const res = await fetch(`http://127.0.0.1:${port}/dashboard`);
+		assert.equal(res.status, 200);
+		assert.match(res.headers.get("content-type") || "", /text\/html/);
+
+		const html = await res.text();
+		assert.match(html, /Telemetry control room/);
+		assert.match(html, /id="dashboardConnection"/);
+		assert.match(html, /id="refreshBtn"/);
+		assert.match(html, /id="filterBar"/);
+		assert.match(html, /id="cHealth"/);
+		assert.match(html, /id="installTableWrap"/);
+		assert.match(html, /localStorage\.getItem\('st'\)/);
+
+		const script = html.match(/<script>\n([\s\S]*?)\n<\/script>/)?.[1];
+		assert.ok(script);
+		assert.doesNotThrow(() => new Function(script));
+	});
+
 	it("calculates estimated savings for gemini 3.6 flash models in /v1/stats", async () => {
 		const payload = {
 			event: "heartbeat",
