@@ -1,6 +1,9 @@
 // HTTP reverse proxy - forwards requests to Antigravity with credential rotation
 
-import { buildRotatorResponseHeaders } from "./response-headers.js";
+import {
+  buildRotatorResponseHeaders,
+  maskAccountLabel,
+} from "./response-headers.js";
 import {
   createServer,
   type IncomingMessage,
@@ -119,6 +122,29 @@ export interface RequestBody {
 export interface ForwardedResponse {
   response: Response;
   endpoint: string;
+}
+
+export type BenchmarkResultStatus = "success" | "failed" | "skipped";
+
+export interface BenchmarkResult {
+  account: string;
+  status: BenchmarkResultStatus;
+  latencyMs: number | null;
+  ttfbMs: number | null;
+  outputTokens: number | null;
+  tokensPerSecond: number | null;
+  error?: string;
+}
+
+export interface BenchmarkSummary {
+  total: number;
+  succeeded: number;
+  failed: number;
+  skipped: number;
+  successRate: number;
+  averageLatencyMs: number | null;
+  averageTtfbMs: number | null;
+  averageTokensPerSecond: number | null;
 }
 
 export interface RotationAttemptContext {
@@ -857,6 +883,7 @@ export async function forwardRequest(
   account: AccountRuntime,
   body: RequestBody,
   originalHeaders: Record<string, string>,
+  signal?: AbortSignal,
 ): Promise<ForwardedResponse> {
   // Swap credentials
   body.project = account.config.projectId;
@@ -937,12 +964,15 @@ export async function forwardRequest(
       const timeout = controller
         ? setTimeout(() => controller.abort(), 10_000)
         : undefined;
+      const requestSignal = controller?.signal && signal
+        ? AbortSignal.any([controller.signal, signal])
+        : signal ?? controller?.signal;
 
       const response = await fetch(url, {
         method: "POST",
         headers: forwardHeaders,
         body: requestBody,
-        signal: controller?.signal,
+        signal: requestSignal,
       });
       if (timeout) clearTimeout(timeout);
 
@@ -970,6 +1000,242 @@ export async function forwardRequest(
   }
 
   throw new Error("All endpoints failed");
+}
+
+const BENCHMARK_MODEL = "gemini-3-flash";
+const BENCHMARK_PROMPT = "Reply with exactly: OK";
+const BENCHMARK_MAX_OUTPUT_TOKENS = 16;
+const BENCHMARK_TIMEOUT_MS = 30_000;
+
+function benchmarkRequestBody(account: AccountRuntime): RequestBody {
+  return {
+    project: account.config.projectId,
+    model: BENCHMARK_MODEL,
+    request: {
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: BENCHMARK_PROMPT }],
+        },
+      ],
+      generationConfig: {
+        maxOutputTokens: BENCHMARK_MAX_OUTPUT_TOKENS,
+      },
+    },
+  };
+}
+
+function benchmarkUsage(raw: string): { outputTokens: number } | null {
+  let outputTokens = 0;
+  for (const event of raw.split(/\r?\n\r?\n/)) {
+    const usage = extractUsageFromSseEvent(event);
+    if (usage) outputTokens = usage.outputTokens;
+  }
+  return outputTokens > 0 ? { outputTokens } : null;
+}
+
+function benchmarkFailure(
+  account: AccountRuntime,
+  startedAt: number,
+  error: string,
+  ttfbMs: number | null = null,
+): BenchmarkResult {
+  return {
+    account: maskAccountLabel(account.config.label || account.config.email),
+    status: "failed",
+    latencyMs: Date.now() - startedAt,
+    ttfbMs,
+    outputTokens: null,
+    tokensPerSecond: null,
+    error: error.slice(0, 240),
+  };
+}
+
+export async function benchmarkAccount(
+  rotator: AccountRotator,
+  account: AccountRuntime,
+  sharedSignal?: AbortSignal,
+): Promise<BenchmarkResult> {
+  const label = maskAccountLabel(account.config.label || account.config.email);
+  const startedAt = Date.now();
+  const maxConcurrent = Math.max(
+    1,
+    rotator.getConfig().maxConcurrentRequestsPerAccount ?? 1,
+  );
+  if (account.inFlightRequests >= maxConcurrent) {
+    return {
+      account: label,
+      status: "skipped",
+      latencyMs: null,
+      ttfbMs: null,
+      outputTokens: null,
+      tokensPerSecond: null,
+      error: "Account already has the maximum number of in-flight requests",
+    };
+  }
+
+  rotator.startRequest(account, BENCHMARK_MODEL);
+  const timeoutController = new AbortController();
+  const timeout = setTimeout(
+    () => timeoutController.abort(new Error("Benchmark timeout")),
+    BENCHMARK_TIMEOUT_MS,
+  );
+  const signal = sharedSignal
+    ? AbortSignal.any([timeoutController.signal, sharedSignal])
+    : timeoutController.signal;
+  let ttfbMs: number | null = null;
+
+  try {
+    await rotator.ensureValidToken(account);
+    const forwarded = await forwardRequest(
+      account,
+      benchmarkRequestBody(account),
+      {},
+      signal,
+    );
+    ttfbMs = Date.now() - startedAt;
+    const raw = await forwarded.response.text();
+    const latencyMs = Date.now() - startedAt;
+    if (!forwarded.response.ok) {
+      return benchmarkFailure(
+        account,
+        startedAt,
+        `HTTP ${forwarded.response.status}: ${raw || forwarded.response.statusText}`,
+        ttfbMs,
+      );
+    }
+
+    const usage = benchmarkUsage(raw);
+    const outputTokens = usage?.outputTokens ?? Math.max(1, Math.ceil(raw.length / 4));
+    return {
+      account: label,
+      status: "success",
+      latencyMs,
+      ttfbMs,
+      outputTokens,
+      tokensPerSecond: outputTokens / Math.max(latencyMs / 1000, 0.001),
+    };
+  } catch (err) {
+    return benchmarkFailure(account, startedAt, formatError(err), ttfbMs);
+  } finally {
+    clearTimeout(timeout);
+    rotator.finishRequest(account, BENCHMARK_MODEL);
+  }
+}
+
+function averageBenchmarkMetric(
+  results: BenchmarkResult[],
+  metric: "latencyMs" | "ttfbMs" | "tokensPerSecond",
+): number | null {
+  const values = results
+    .filter((result) => result.status === "success")
+    .map((result) => result[metric])
+    .filter((value): value is number => value !== null);
+  if (values.length === 0) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+export function summarizeBenchmarkResults(
+  results: BenchmarkResult[],
+): BenchmarkSummary {
+  const succeeded = results.filter((result) => result.status === "success").length;
+  const failed = results.filter((result) => result.status === "failed").length;
+  const skipped = results.filter((result) => result.status === "skipped").length;
+  return {
+    total: results.length,
+    succeeded,
+    failed,
+    skipped,
+    successRate: results.length > 0 ? (succeeded / results.length) * 100 : 0,
+    averageLatencyMs: averageBenchmarkMetric(results, "latencyMs"),
+    averageTtfbMs: averageBenchmarkMetric(results, "ttfbMs"),
+    averageTokensPerSecond: averageBenchmarkMetric(results, "tokensPerSecond"),
+  };
+}
+
+function sortBenchmarkResults(results: BenchmarkResult[]): BenchmarkResult[] {
+  const rank: Record<BenchmarkResultStatus, number> = {
+    success: 0,
+    failed: 1,
+    skipped: 2,
+  };
+  return results.sort((a, b) => {
+    if (rank[a.status] !== rank[b.status]) return rank[a.status] - rank[b.status];
+    if (a.status === "success" && b.status === "success") {
+      return (b.tokensPerSecond ?? 0) - (a.tokensPerSecond ?? 0);
+    }
+    return a.account.localeCompare(b.account);
+  });
+}
+
+function writeBenchmarkEvent(
+  res: ServerResponse,
+  payload: Record<string, unknown>,
+): boolean {
+  if (res.writableEnded || res.destroyed) return false;
+  try {
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function serveBenchmarkApi(
+  res: ServerResponse,
+  rotator: AccountRotator,
+): Promise<void> {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-store",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  res.write(": benchmark\n\n");
+
+  const accounts = rotator.getBenchmarkAccounts();
+  const clientController = new AbortController();
+  const onClose = (): void => clientController.abort();
+  res.once("close", onClose);
+  const results: BenchmarkResult[] = [];
+
+  try {
+    writeBenchmarkEvent(res, {
+      type: "start",
+      total: accounts.length,
+      model: BENCHMARK_MODEL,
+    });
+    await Promise.all(
+      accounts.map(async (account) => {
+        const result = await benchmarkAccount(
+          rotator,
+          account,
+          clientController.signal,
+        );
+        results.push(result);
+        writeBenchmarkEvent(res, {
+          type: "progress",
+          completed: results.length,
+          total: accounts.length,
+          result,
+        });
+      }),
+    );
+    const sortedResults = sortBenchmarkResults(results);
+    writeBenchmarkEvent(res, {
+      type: "complete",
+      summary: summarizeBenchmarkResults(sortedResults),
+      results: sortedResults,
+    });
+  } catch (err) {
+    writeBenchmarkEvent(res, {
+      type: "error",
+      error: formatError(err),
+    });
+  } finally {
+    res.off("close", onClose);
+    if (!res.writableEnded) res.end();
+  }
 }
 
 export async function withRotation<T>(
@@ -1579,6 +1845,7 @@ export function startProxy(
   startNotificationPoller();
   const sseClients = new Set<ServerResponse>();
   let sseBroadcastTimer: ReturnType<typeof setTimeout> | null = null;
+  let benchmarkRunning = false;
   const SSE_THROTTLE_MS = 1000; // max 1 push/second
 
   const scheduleSseBroadcast = (): void => {
@@ -1713,6 +1980,20 @@ export function startProxy(
     if (method === "GET" && pathname === "/api/config/export") {
       if (!requireAdmin(req, res)) return;
       serveConfigExportApi(res, rotator);
+      return;
+    }
+
+    if (method === "POST" && pathname === "/api/benchmark") {
+      if (!requireAdmin(req, res)) return;
+      if (benchmarkRunning) {
+        res.writeHead(409, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: "Benchmark already running" }));
+        return;
+      }
+      benchmarkRunning = true;
+      void serveBenchmarkApi(res, rotator).finally(() => {
+        benchmarkRunning = false;
+      });
       return;
     }
 

@@ -6,6 +6,7 @@ import {
 	rm,
 	writeFile,
 } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { getConfigDir } from "./paths.js";
 
@@ -31,7 +32,7 @@ export async function writeTextFileAtomic(
 	const previous = pendingAtomicWrites.get(path) ?? Promise.resolve();
 	const write = previous.catch(() => undefined).then(async () => {
 		await ensureParentDir(path);
-		const tempPath = `${path}.tmp`;
+		const tempPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
 		try {
 			await writeFile(tempPath, contents, "utf-8");
 			await rename(tempPath, path);

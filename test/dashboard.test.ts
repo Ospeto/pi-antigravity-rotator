@@ -87,6 +87,7 @@ describe("dashboard", () => {
       "/api/status",
       "/api/config",
       "/api/events",
+      "/api/benchmark",
       "/api/enable/",
       "/api/disable/",
       "/api/quarantine/",
@@ -102,6 +103,15 @@ describe("dashboard", () => {
     for (const endpoint of endpoints) {
       assert.ok(js.includes(endpoint), `missing endpoint: ${endpoint}`);
     }
+  });
+
+  it("includes the account benchmark controls", () => {
+    const html = renderDashboard();
+    const js = readDashboardJs();
+    assert.match(html, /Account Benchmark/);
+    assert.match(html, /benchmarkBtn/);
+    assert.match(js, /function runBenchmark\(\)/);
+    assert.match(js, /benchmarkResults/);
   });
 
   it("embeds the escapeHtml and jsString helpers used to defend against XSS", () => {

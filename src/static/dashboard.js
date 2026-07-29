@@ -2659,6 +2659,172 @@ function closeModal(event, id) {
   if (modal) modal.classList.remove("open");
 }
 
+var benchmarkRunning = false;
+var benchmarkResultsState = [];
+
+function benchmarkMetric(value, suffix) {
+  return value === null || value === undefined
+    ? "--"
+    : Math.round(value * 10) / 10 + suffix;
+}
+
+function renderBenchmarkResults(results, summary) {
+  var container = document.getElementById("benchmarkResults");
+  if (!container) return;
+  if (!results || results.length === 0) {
+    container.innerHTML = '<div style="color:var(--text-dim);font-size:0.8rem">No active accounts available for benchmarking.</div>';
+    return;
+  }
+  var summaryHtml = summary
+    ? '<div style="color:var(--text-dim);font-size:0.8rem;margin-bottom:8px">Success: ' +
+      summary.successRate.toFixed(1) +
+      "% · Average latency: " +
+      benchmarkMetric(summary.averageLatencyMs, " ms") +
+      " · Average TTFB: " +
+      benchmarkMetric(summary.averageTtfbMs, " ms") +
+      "</div>"
+    : "";
+  var rows = results
+    .map(function (result) {
+      var color =
+        result.status === "success"
+          ? "var(--green)"
+          : result.status === "skipped"
+            ? "var(--yellow)"
+            : "var(--red)";
+      return (
+        "<tr>" +
+        '<td style="padding:7px 8px;font-family:monospace">' +
+        escapeHtml(result.account) +
+        "</td>" +
+        '<td style="padding:7px 8px;color:' +
+        color +
+        '">' +
+        escapeHtml(result.status) +
+        (result.error
+          ? '<div style="color:var(--text-dim);font-size:0.72rem;max-width:360px">' +
+            escapeHtml(result.error) +
+            "</div>"
+          : "") +
+        "</td>" +
+        '<td style="padding:7px 8px;text-align:right">' +
+        benchmarkMetric(result.latencyMs, " ms") +
+        "</td>" +
+        '<td style="padding:7px 8px;text-align:right">' +
+        benchmarkMetric(result.ttfbMs, " ms") +
+        "</td>" +
+        '<td style="padding:7px 8px;text-align:right">' +
+        benchmarkMetric(result.tokensPerSecond, " tok/s") +
+        "</td>" +
+        "</tr>"
+      );
+    })
+    .join("");
+  container.innerHTML =
+    summaryHtml +
+    '<table style="width:100%;border-collapse:collapse;font-size:0.8rem">' +
+    "<thead><tr>" +
+    '<th style="text-align:left;padding:7px 8px;border-bottom:1px solid var(--border)">Account</th>' +
+    '<th style="text-align:left;padding:7px 8px;border-bottom:1px solid var(--border)">Status</th>' +
+    '<th style="text-align:right;padding:7px 8px;border-bottom:1px solid var(--border)">Latency</th>' +
+    '<th style="text-align:right;padding:7px 8px;border-bottom:1px solid var(--border)">TTFB</th>' +
+    '<th style="text-align:right;padding:7px 8px;border-bottom:1px solid var(--border)">Tokens/s</th>' +
+    "</tr></thead><tbody>" +
+    rows +
+    "</tbody></table>";
+}
+
+function handleBenchmarkEvent(payload) {
+  var status = document.getElementById("benchmarkStatus");
+  if (!payload) return;
+  if (payload.type === "start") {
+    benchmarkResultsState = [];
+    if (status) status.textContent = "Benchmarking " + payload.total + " active account(s)...";
+    renderBenchmarkResults([], null);
+  } else if (payload.type === "progress") {
+    benchmarkResultsState = benchmarkResultsState.filter(function (result) {
+      return result.account !== payload.result.account;
+    });
+    benchmarkResultsState.push(payload.result);
+    if (status)
+      status.textContent =
+        "Completed " + payload.completed + " of " + payload.total + " account(s).";
+    renderBenchmarkResults(benchmarkResultsState, null);
+  } else if (payload.type === "complete") {
+    benchmarkResultsState = payload.results || [];
+    renderBenchmarkResults(benchmarkResultsState, payload.summary);
+    if (status)
+      status.textContent =
+        "Completed: " +
+        payload.summary.succeeded +
+        " successful, " +
+        payload.summary.failed +
+        " failed, " +
+        payload.summary.skipped +
+        " skipped.";
+  } else if (payload.type === "error" && status) {
+    status.textContent = "Benchmark failed: " + payload.error;
+  }
+}
+
+async function runBenchmark() {
+  if (benchmarkRunning) return;
+  benchmarkRunning = true;
+  var button = document.getElementById("benchmarkBtn");
+  var status = document.getElementById("benchmarkStatus");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Benchmarking…";
+  }
+  try {
+    var response = await authFetch("/api/benchmark", { method: "POST" });
+    if (!response.ok) {
+      var errorText = await response.text();
+      throw new Error(errorText || "HTTP " + response.status);
+    }
+    if (!response.body) throw new Error("Benchmark stream unavailable");
+    var reader = response.body.getReader();
+    var decoder = new window.TextDecoder();
+    var buffer = "";
+    var consume = function (text) {
+      buffer += text;
+      var events = buffer.split(/\r?\n\r?\n/);
+      buffer = events.pop() || "";
+      events.forEach(function (event) {
+        var data = event
+          .split(/\r?\n/)
+          .filter(function (line) {
+            return line.indexOf("data:") === 0;
+          })
+          .map(function (line) {
+            return line.slice(5).trim();
+          })
+          .join("\n");
+        if (!data) return;
+        try {
+          handleBenchmarkEvent(JSON.parse(data));
+        } catch (err) {
+          console.error("Benchmark SSE parse error:", err);
+        }
+      });
+    };
+    while (true) {
+      var chunk = await reader.read();
+      if (chunk.done) break;
+      consume(decoder.decode(chunk.value, { stream: true }));
+    }
+    consume(decoder.decode());
+  } catch (err) {
+    if (status) status.textContent = "Benchmark failed: " + String(err);
+  } finally {
+    benchmarkRunning = false;
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Benchmark Active Accounts";
+    }
+  }
+}
+
 async function refresh() {
   try {
     var res = await authFetch("/api/status");

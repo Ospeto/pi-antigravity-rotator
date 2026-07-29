@@ -659,6 +659,17 @@ const DASHBOARD_HTML = renderAppShell({
   <div id="forecastGrid" style="margin-top:8px"></div>
 </div>
 
+<div class="routing-panel" id="benchmarkPanel" style="margin-top:12px">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+    <div>
+      <strong>Account Benchmark</strong>
+      <div id="benchmarkStatus" style="color:var(--text-dim);font-size:0.8rem;margin-top:4px">Measure active account performance without persisting results.</div>
+    </div>
+    <button class="btn-secondary" id="benchmarkBtn" onclick="runBenchmark()">Benchmark Active Accounts</button>
+  </div>
+  <div id="benchmarkResults" style="margin-top:12px;overflow-x:auto"></div>
+</div>
+
 <div class="accounts-grid" id="accounts"></div>
 
 <div class="list-panel" id="listPanel" style="display:none">

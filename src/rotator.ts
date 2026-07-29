@@ -2976,6 +2976,10 @@ export class AccountRotator {
     return this.accounts.find((a) => a.config.email === email);
   }
 
+  public getBenchmarkAccounts(): AccountRuntime[] {
+    return this.accounts.filter((account) => !account.disabled && !account.flagged);
+  }
+
   private shouldUseRequestCountRotation(
     account: AccountRuntime,
     model?: string,
