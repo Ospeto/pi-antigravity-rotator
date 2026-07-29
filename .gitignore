@@ -23,3 +23,13 @@ docker-data/
 .beads-credential-key
 models.json
 .idea/
+.local/
+scratch/
+data/
+*.csv
+DEVELOPMENT_NOTES.md
+.env
+.vscode/
+*.tmp
+*.orig
+.DS_Store

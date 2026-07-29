@@ -166,9 +166,6 @@ describe("dashboard", () => {
 
   it("does not embed OAuth credentials in utility scripts", () => {
     const scripts = [
-      "query_models.js",
-      "test_generate.js",
-      "test_loop.js",
       "scripts/query_models.js",
       "scripts/test_generate.js",
       "scripts/test_loop.js",
