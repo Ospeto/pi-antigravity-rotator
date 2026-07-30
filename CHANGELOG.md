@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-07-30
+
+### Added
+- **Prompt Compression**: Added opt-in lossless Lite compression and RTK compression with 55 command-specific filter packs. Configure `compressionMode` as `lite`, `rtk`, or `rtk+lite`, or override it per request with `X-Rotator-Compression`.
+- **Account Benchmarking**: Added a dashboard benchmark for measuring active account performance without persisting benchmark results.
+- **Request Observability**: Added `X-Rotator-*` response headers for account, model, token, cost, latency, health, routing, idempotency, and compression metrics.
+
+### Changed
+- **Dashboard Workspaces**: Redesigned the Accounts, Virtual Keys, Spend Logs, and telemetry/notification views with improved navigation, masking, filtering, and responsive layouts.
+- **Request Reliability**: Added idempotency protection for duplicate in-flight requests and pre-flush stream recovery with configurable retries.
+- **Persistence Performance**: Migrated hot-path state persistence to asynchronous I/O and improved telemetry accounting for input/output tokens and savings.
+
+### Security
+- **Refresh Token Encryption**: Added AES-256-GCM encryption at rest with salted `scrypt` key derivation for new `enc:v2` tokens while preserving decryption of existing `enc:v1` tokens.
+- **Code Scanning Hardening**: Removed the catastrophic-backtracking path regex, stopped exposing upstream/config error details to clients, and retained diagnostics in server logs.
+- **Benchmark Privacy**: Applied the dashboard's existing PII masking to benchmark account labels.
+
 ## [2.5.0] - 2026-07-28
 
 ### Added

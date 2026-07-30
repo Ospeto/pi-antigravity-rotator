@@ -18,6 +18,7 @@ pi-antigravity-rotator start --config-dir /path/to/config
 | `PI_ROTATOR_DIR` | Config directory path (default: `~/.pi-antigravity-rotator/`) |
 | `PI_ROTATOR_DATABASE_URL` | PostgreSQL connection string for Virtual Keys and Spend Logging |
 | `DATABASE_URL` | Fallback PostgreSQL connection string |
+| `PI_ROTATOR_ENCRYPTION_KEY` | Secret used to encrypt OAuth refresh tokens at rest. A 64-character hexadecimal key is recommended. `ENCRYPTION_KEY` is accepted as a fallback. |
 | `PI_ROTATOR_ADMIN_TOKEN` | Admin token for dashboard/API access. If unset, a secure token is auto-generated on first run and saved to `.admin-token` |
 | `PI_ROTATOR_BIND_HOST` | Network interface to bind on (default: `0.0.0.0`; set to `127.0.0.1` for local-only) |
 | `PI_ROTATOR_MAX_BODY_BYTES` | Max accepted proxy request body size in bytes (default: `26214400` = 25 MiB) |
@@ -67,7 +68,10 @@ The main configuration file. Created automatically by the `login` command, and e
   "slowModeJitterMaxMs": 25000,
   "protectivePauseMs": 21600000,
   "useRequestCountRotationWhenQuotaUnknownOnly": true,
+  "idempotencyEnabled": true,
+  "idempotencyWindowMs": 2000,
   "streamRecoveryMaxRetries": 2,
+  "compressionMode": "off",
   "accounts": [
     {
       "email": "user@gmail.com",
@@ -108,7 +112,10 @@ The main configuration file. Created automatically by the `login` command, and e
 | `tokenBucketMaxTokens` | `50` | Bucket capacity when enabled |
 | `tokenBucketRefillPerMinute` | `6` | Refill speed when enabled |
 | `tokenBucketInitialTokens` | `50` | Startup fill level when enabled |
+| `idempotencyEnabled` | `true` | Deduplicate identical in-flight requests and short-window retries |
+| `idempotencyWindowMs` | `2000` | Retention window for completed idempotent request results |
 | `streamRecoveryMaxRetries` | `2` | Maximum account rotations for upstream failures before the response is flushed |
+| `compressionMode` | `off` | Prompt compression mode: `off`, `lite`, `rtk`, or `rtk+lite`. Can be overridden by the `X-Rotator-Compression` request header |
 
 ## Account Fields
 

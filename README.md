@@ -45,6 +45,14 @@ Multi-account load balancing, per-model quota routing, account health scoring, a
 
 ---
 
+## v2.6 Highlights
+
+- **Lossless Prompt Compression**: Optional Lite and RTK compression modes preserve code-critical content while reducing prompt size. Enable `compressionMode` in `accounts.json` or override a request with `X-Rotator-Compression: lite`, `rtk`, or `rtk+lite`.
+- **Operational Observability**: `X-Rotator-*` response headers expose routing, latency, token, cost, health, idempotency, and compression metrics without changing response bodies.
+- **Reliable Request Handling**: Configurable pre-flush stream recovery, duplicate-request idempotency, asynchronous persistence, and an active-account benchmark improve production operations.
+- **Dashboard Workspaces**: Refined Accounts, Virtual Keys, Spend Logs, telemetry, and notification experiences with responsive layouts, filtering, and consistent PII masking.
+- **Security Hardening**: Refresh tokens now use salted `scrypt` plus AES-256-GCM for new encrypted records, legacy encrypted tokens remain readable, and public error responses no longer expose internal details.
+
 ## v2.5 Highlights
 
 - **Automated GHCR Multi-arch Builds**: Official Docker images (`linux/amd64`, `linux/arm64`) automatically built and published to GitHub Container Registry.
@@ -56,6 +64,27 @@ Multi-account load balancing, per-model quota routing, account health scoring, a
 - **Spend Logging & Audit Inspector**: PostgreSQL audit trail of all requests, token metrics, TTFB/Total duration, Base64 media sanitization, 6-decimal USD cost breakdown, and Request/Response payload viewer.
 - **Multi-page Web Dashboard**: Unified header navigation connecting Accounts, Virtual Keys, and Spend Logs, featuring customizable column visibility, search/filtering, and instant PII masking.
 - **PostgreSQL Persistence Backend**: Enable `PI_ROTATOR_DATABASE_URL` for high-concurrency key validation, persistent spend logging, and retention policies.
+
+### Compression and token encryption
+
+Compression is disabled by default. To enable a default mode, add this field to `accounts.json`:
+
+```json
+{
+  "compressionMode": "lite"
+}
+```
+
+For a single request, send `X-Rotator-Compression: lite`, `rtk`, or `rtk+lite`. The response reports the selected mode and savings through `X-Rotator-Compression-*` headers.
+
+To encrypt refresh tokens at rest, set a secret before starting the rotator. A 64-character hexadecimal key is recommended:
+
+```bash
+export PI_ROTATOR_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+pi-antigravity-rotator start
+```
+
+Existing `enc:v1` records remain decryptable during migration; newly written records use `enc:v2`.
 
 ---
 
