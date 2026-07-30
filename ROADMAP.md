@@ -2,6 +2,11 @@
 
 3-month roadmap based on community feedback and strategic positioning goals.
 
+> Status update (2026-07-30): The benchmark, public telemetry page, and storage
+> async I/O work are implemented. The account-card health visual was descoped by
+> product decision. Remaining scheduled work is the routing-inspector breakdown
+> and true token-by-token streaming.
+
 ---
 
 ## Month 1 — Positioning & Documentation
@@ -22,10 +27,10 @@
 
 **Goal:** Make the dashboard a compelling reason to use the gateway even with a single account.
 
-- [ ] **Health score visual** — Surface the per-account health score (0.0–1.0) prominently on account cards (e.g. colored badge with numeric value and label: Excellent / Good / Degraded / Poor)
-- [ ] **Benchmark tool** — Button in the dashboard that runs a latency/throughput probe against all accounts simultaneously and ranks them. Output: account, avg latency, success rate, p95.
+- [x] **Health score visual (descoped)** — The product decision was to avoid a prominent card badge. The current UI exposes the numeric health score in account cards and the routing inspector, and proxy responses expose it through `X-Rotator-Health-Score`.
+- [x] **Benchmark tool** — Dashboard benchmark runs a latency/throughput probe against active accounts without persisting results. Output includes account, latency, success, and failure details.
 - [ ] **Dashboard improvements** — Improve the routing inspector modal to show health score breakdown (quota component, error penalty, cooldown penalty, availability penalty)
-- [ ] **Public telemetry stats page** — Static page at `telemetry.tuxevil.com/stats` showing aggregated installation metrics (powered by the new `/v1/public-stats` endpoint)
+- [x] **Public telemetry stats page** — Static page at `telemetry.tuxevil.com/stats` shows aggregated installation metrics powered by `/v1/public-stats`.
 
 ---
 
@@ -34,7 +39,7 @@
 **Goal:** Eliminate the main technical gap vs. native API usage.
 
 - [ ] **Real token-by-token streaming** — Replace the current buffer-then-emit SSE passthrough with true chunk-by-chunk streaming in the compatibility adapters (`compat.ts`, `proxy.ts`). This is the highest-impact UX improvement: eliminates perceived latency for long completions.
-- [ ] **Async I/O migration** — Migrate `writeFileSync`/`readFileSync`/`renameSync` in `src/storage.ts` to `fs.promises` equivalents to avoid blocking the event loop under high concurrency.
+- [x] **Async I/O migration** — Migrated the storage layer's persistence operations to async filesystem APIs to avoid blocking the event loop under high concurrency.
 
 ---
 
@@ -58,4 +63,4 @@ These items are tracked but not scheduled for the current 3-month window:
 | 3 | Admin routes secured by default | Resolved — auto-generated token on first run |
 | 4 | External service dependencies (telemetry, version check) non-blocking | Resolved — all async with aggressive timeouts |
 | 5 | Dynamic model configuration | Resolved — `modelSpecs` and `modelAliases` in config |
-| 6 | Async I/O in storage layer | Planned — Month 3 |
+| 6 | Async I/O in storage layer | Resolved — storage persistence uses async filesystem APIs |
