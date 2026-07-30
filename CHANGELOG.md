@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- **Routing Inspector Health Breakdown**: Show quota, error, cooldown, availability, and final-score components for each routing candidate.
+
+### Verified
+- **Incremental Streaming**: Added integration coverage proving OpenAI Chat, Responses, Anthropic, and native adapters deliver upstream chunks before completion.
+
 ## [2.6.0] - 2026-07-30
 
 ### Added

@@ -213,6 +213,35 @@ describe("v2 routing and status", () => {
     );
   });
 
+  it("exposes the health score components in routing diagnostics", () => {
+    const rotator = new AccountRotator(makeConfig()) as any;
+    rotator.stopQuotaPolling();
+    const account = rotator.accounts[0];
+    account.quota = [
+      {
+        modelKey: "gemini-3.1-pro",
+        displayName: "G3.1Pro",
+        percentRemaining: 50,
+        resetTime: null,
+        timerType: "7d",
+      },
+    ];
+    account.consecutiveErrors = 2;
+    account.cooldownsByModel = { "gemini-3.1-pro": Date.now() + 1000 };
+    rotator.refreshHealthScores();
+
+    const diagnostic =
+      rotator.getStatus().routingDiagnostics["gemini-3.1-pro"].accounts[0];
+    assert.deepEqual(diagnostic.healthBreakdown, {
+      quotaComponent: 0.5,
+      errorPenalty: 0.2,
+      cooldownPenalty: 0.1,
+      availabilityPenalty: 0,
+      score: 0.2,
+    });
+    assert.equal(diagnostic.healthScore, 0.2);
+  });
+
   it("accepts plus as a first-class account tier", async () => {
     const rotator = new AccountRotator(makeConfig());
     rotator.stopQuotaPolling();

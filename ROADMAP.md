@@ -2,10 +2,10 @@
 
 3-month roadmap based on community feedback and strategic positioning goals.
 
-> Status update (2026-07-30): The benchmark, public telemetry page, and storage
-> async I/O work are implemented. The account-card health visual was descoped by
-> product decision. Remaining scheduled work is the routing-inspector breakdown
-> and true token-by-token streaming.
+> Status update (2026-07-30): The scheduled Month 1-3 work is implemented or
+> resolved. The account-card health visual was descoped by product decision;
+> the routing inspector now exposes its component breakdown, and the streaming
+> adapters are covered by incremental-delivery tests.
 
 ---
 
@@ -29,7 +29,7 @@
 
 - [x] **Health score visual (descoped)** — The product decision was to avoid a prominent card badge. The current UI exposes the numeric health score in account cards and the routing inspector, and proxy responses expose it through `X-Rotator-Health-Score`.
 - [x] **Benchmark tool** — Dashboard benchmark runs a latency/throughput probe against active accounts without persisting results. Output includes account, latency, success, and failure details.
-- [ ] **Dashboard improvements** — Improve the routing inspector modal to show health score breakdown (quota component, error penalty, cooldown penalty, availability penalty)
+- [x] **Dashboard improvements** — Routing Inspector shows the health score breakdown: quota component, error penalty, cooldown penalty, availability penalty, and final score.
 - [x] **Public telemetry stats page** — Static page at `telemetry.tuxevil.com/stats` shows aggregated installation metrics powered by `/v1/public-stats`.
 
 ---
@@ -38,7 +38,7 @@
 
 **Goal:** Eliminate the main technical gap vs. native API usage.
 
-- [ ] **Real token-by-token streaming** — Replace the current buffer-then-emit SSE passthrough with true chunk-by-chunk streaming in the compatibility adapters (`compat.ts`, `proxy.ts`). This is the highest-impact UX improvement: eliminates perceived latency for long completions.
+- [x] **Real token-by-token streaming** — OpenAI Chat, Responses, Anthropic, and native adapters forward upstream chunks before the upstream response completes; integration coverage protects this behavior.
 - [x] **Async I/O migration** — Migrated the storage layer's persistence operations to async filesystem APIs to avoid blocking the event loop under high concurrency.
 
 ---
@@ -59,7 +59,7 @@ These items are tracked but not scheduled for the current 3-month window:
 | # | Issue | Status |
 |---|-------|--------|
 | 1 | Responses API persistence (Codex sessions survive restarts) | Resolved — `responses-store.ts` with file/DB persistence |
-| 2 | Real SSE streaming (token-by-token passthrough) | Planned — Month 3 |
+| 2 | Real SSE streaming (token-by-token passthrough) | Resolved — adapters forward chunks incrementally |
 | 3 | Admin routes secured by default | Resolved — auto-generated token on first run |
 | 4 | External service dependencies (telemetry, version check) non-blocking | Resolved — all async with aggressive timeouts |
 | 5 | Dynamic model configuration | Resolved — `modelSpecs` and `modelAliases` in config |

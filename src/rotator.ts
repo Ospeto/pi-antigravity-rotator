@@ -7,6 +7,7 @@ import {
   type AccountTier,
   type Config,
   type GoogleQuotaResponse,
+  type HealthScoreBreakdown,
   type ModelQuota,
   type ModelRotationState,
   type PersistedState,
@@ -1335,6 +1336,7 @@ export class AccountRotator {
       const quota = rejection ? null : this.getModelQuota(account, modelKey);
       const tierRank = this.getTierRank(account);
       const distance = i + 1;
+      const healthBreakdown = this.getHealthScoreBreakdown(account);
       const tokenRatio =
         snapshot.capacity > 0 ? snapshot.tokens / snapshot.capacity : 0;
       const hybridScore =
@@ -1344,7 +1346,7 @@ export class AccountRotator {
               priority,
               quota,
               tierRank,
-              account.healthScore,
+              healthBreakdown.score,
               tokenRatio,
               distance,
             );
@@ -1357,7 +1359,8 @@ export class AccountRotator {
         timerPriority: priority,
         quota,
         tier: account.config.tier || "unknown",
-        healthScore: account.healthScore,
+        healthScore: healthBreakdown.score,
+        healthBreakdown,
         distance: rejection ? null : distance,
         tokenBucket: snapshot,
         rejectedReason: rejection?.reason ?? null,
@@ -1375,7 +1378,7 @@ export class AccountRotator {
         priority,
         quota,
         tier: tierRank,
-        health: account.healthScore,
+        health: healthBreakdown.score,
         distance,
         tokenRatio,
         hybridScore,
@@ -1923,22 +1926,30 @@ export class AccountRotator {
 
   private refreshHealthScores(): void {
     for (const account of this.accounts) {
-      const quotaAverage =
-        account.quota.length > 0
-          ? account.quota.reduce(
-              (sum, quota) => sum + quota.percentRemaining,
-              0,
-            ) / account.quota.length
-          : 50;
-      const errorPenalty = Math.min(0.5, account.consecutiveErrors * 0.1);
-      const cooldownPenalty =
-        Object.keys(account.cooldownsByModel).length > 0 ? 0.1 : 0;
-      const availabilityPenalty = account.flagged
-        ? 1
-        : account.disabled
-          ? 0.75
-          : 0;
-      account.healthScore = Math.max(
+      account.healthScore = this.getHealthScoreBreakdown(account).score;
+    }
+  }
+
+  private getHealthScoreBreakdown(
+    account: AccountRuntime,
+  ): HealthScoreBreakdown {
+    const quotaAverage =
+      account.quota.length > 0
+        ? account.quota.reduce(
+            (sum, quota) => sum + quota.percentRemaining,
+            0,
+          ) / account.quota.length
+        : 50;
+    const errorPenalty = Math.min(0.5, account.consecutiveErrors * 0.1);
+    const cooldownPenalty =
+      Object.keys(account.cooldownsByModel).length > 0 ? 0.1 : 0;
+    const availabilityPenalty = account.flagged
+      ? 1
+      : account.disabled
+        ? 0.75
+        : 0;
+    const score = Number(
+      Math.max(
         0,
         Math.min(
           1,
@@ -1947,8 +1958,15 @@ export class AccountRotator {
             cooldownPenalty -
             availabilityPenalty,
         ),
-      );
-    }
+      ).toFixed(4),
+    );
+    return {
+      quotaComponent: quotaAverage / 100,
+      errorPenalty,
+      cooldownPenalty,
+      availabilityPenalty,
+      score,
+    };
   }
 
   private async saveTokenUsage(): Promise<void> {

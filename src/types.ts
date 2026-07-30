@@ -510,6 +510,14 @@ export interface AccountStatus {
   effectiveFreshWindowStartsAllowed: boolean;
 }
 
+export interface HealthScoreBreakdown {
+  quotaComponent: number;
+  errorPenalty: number;
+  cooldownPenalty: number;
+  availabilityPenalty: number;
+  score: number;
+}
+
 export interface RoutingAccountDiagnostic {
   email: string;
   label: string;
@@ -519,6 +527,7 @@ export interface RoutingAccountDiagnostic {
   quota: number | null;
   tier: AccountTier;
   healthScore: number;
+  healthBreakdown: HealthScoreBreakdown;
   distance: number | null;
   tokenBucket: {
     enabled: boolean;

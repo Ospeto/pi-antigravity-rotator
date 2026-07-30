@@ -248,6 +248,42 @@ async function waitFor(
   assert.fail("condition was not met before timeout");
 }
 
+async function readChunkWithTimeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  timeoutMs = 1000,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  return await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("timed out waiting for streamed response data"));
+    }, timeoutMs);
+    reader.read().then(
+      (result) => {
+        clearTimeout(timer);
+        resolve(result);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+async function readUntilMarker(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  marker: string,
+): Promise<string> {
+  const decoder = new TextDecoder();
+  let text = "";
+  while (!text.includes(marker)) {
+    const result = await readChunkWithTimeout(reader);
+    if (result.done) break;
+    text += decoder.decode(result.value, { stream: true });
+  }
+  assert.match(text, new RegExp(marker));
+  return text;
+}
+
 async function postAndAbortAfterFirstChunk(
   url: string,
   payload: unknown,
@@ -588,6 +624,104 @@ describe("compat observability", () => {
     } finally {
       await closeHttpServer(proxy);
       await closeHttpServer(upstream.server);
+    }
+  });
+
+  it("delivers stream tokens before the upstream response completes", async () => {
+    const cases = [
+      {
+        path: "/v1/chat/completions",
+        payload: {
+          model: "gemini-3.5-flash",
+          messages: [{ role: "user", content: "ping" }],
+          stream: true,
+        },
+      },
+      {
+        path: "/v1/responses",
+        payload: {
+          model: "gemini-3.5-flash",
+          input: "ping",
+          stream: true,
+        },
+      },
+      {
+        path: "/v1/messages",
+        payload: {
+          model: "claude-sonnet-4-6",
+          max_tokens: 32,
+          messages: [{ role: "user", content: "ping" }],
+          stream: true,
+        },
+      },
+      {
+        path: "/v1internal:streamGenerateContent?alt=sse",
+        payload: {
+          model: "gemini-3-flash",
+          request: { contents: [{ role: "user", parts: [{ text: "ping" }] }] },
+        },
+      },
+    ];
+
+    for (const testCase of cases) {
+      let upstreamCompleted = false;
+      let releaseSecondChunk = (): void => {};
+      const secondChunk = new Promise<void>((resolve) => {
+        releaseSecondChunk = resolve;
+      });
+      const upstream = await listenServer((req, res) => {
+        req.resume();
+        req.on("end", () => {
+          void (async () => {
+            res.writeHead(200, { "Content-Type": "text/event-stream" });
+            res.flushHeaders();
+            res.write(
+              'data: {"candidates":[{"content":{"parts":[{"text":"first-token"}]}}]}\n\n',
+            );
+            await secondChunk;
+            res.write(
+              'data: {"candidates":[{"content":{"parts":[{"text":"second-token"}]}}],"usageMetadata":{"promptTokenCount":5,"candidatesTokenCount":3}}\n\n',
+            );
+            res.end();
+            upstreamCompleted = true;
+          })();
+        });
+      });
+      endpointOverrides.splice(0, endpointOverrides.length, upstream.url);
+
+      const tracking = createTracking();
+      const proxy = await startTestProxy(createRotatorStub(tracking));
+      const port = (proxy.address() as AddressInfo).port;
+
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}${testCase.path}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(testCase.payload),
+        });
+        assert.equal(response.status, 200, testCase.path);
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error("streaming response body is unavailable");
+
+        const firstChunk = await readUntilMarker(reader, "first-token");
+        assert.match(firstChunk, /first-token/);
+        assert.equal(upstreamCompleted, false, testCase.path);
+
+        releaseSecondChunk();
+        let remainder = "";
+        const decoder = new TextDecoder();
+        while (true) {
+          const result = await readChunkWithTimeout(reader);
+          if (result.done) break;
+          remainder += decoder.decode(result.value, { stream: true });
+        }
+        assert.match(remainder, /second-token/);
+        assert.equal(upstreamCompleted, true, testCase.path);
+      } finally {
+        releaseSecondChunk();
+        await closeHttpServer(proxy);
+        await closeServer(upstream.server);
+      }
     }
   });
 

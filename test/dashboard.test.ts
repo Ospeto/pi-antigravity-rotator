@@ -190,6 +190,16 @@ describe("dashboard", () => {
     assert.match(js, /benchmarkResults/);
   });
 
+  it("renders routing inspector health score components", () => {
+    const js = readDashboardJs();
+    assert.match(js, /function renderHealthBreakdown\(entry\)/);
+    assert.match(js, /breakdown\.quotaComponent/);
+    assert.match(js, /breakdown\.errorPenalty/);
+    assert.match(js, /breakdown\.cooldownPenalty/);
+    assert.match(js, /breakdown\.availabilityPenalty/);
+    assert.match(js, /Health breakdown/);
+  });
+
   it("applies PII masking to account benchmark rows", () => {
     const js = readDashboardJs();
     assert.match(js, /escapeHtml\(maskText\(result\.account\)\)/);

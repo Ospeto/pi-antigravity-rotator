@@ -2326,6 +2326,34 @@ function renderRoutingInspector(data) {
     return;
   }
 
+  function formatHealthComponent(value, penalty) {
+    var numeric = Number(value);
+    if (!Number.isFinite(numeric)) return "--";
+    var percent = Math.round(numeric * 100);
+    return penalty && percent > 0 ? "-" + percent + "%" : percent + "%";
+  }
+
+  function renderHealthBreakdown(entry) {
+    var breakdown = entry && entry.healthBreakdown;
+    if (!breakdown) return '<span style="color:var(--text-dim)">--</span>';
+    return (
+      '<details class="health-breakdown">' +
+      "<summary>View</summary>" +
+      '<div style="display:grid;gap:3px;margin-top:5px;white-space:nowrap">' +
+      "<span>Quota: " +
+      formatHealthComponent(breakdown.quotaComponent, false) +
+      "</span><span>Error: " +
+      formatHealthComponent(breakdown.errorPenalty, true) +
+      "</span><span>Cooldown: " +
+      formatHealthComponent(breakdown.cooldownPenalty, true) +
+      "</span><span>Availability: " +
+      formatHealthComponent(breakdown.availabilityPenalty, true) +
+      "</span><span>Final: " +
+      formatHealthComponent(breakdown.score, false) +
+      "</span></div></details>"
+    );
+  }
+
   panel.innerHTML = modelKeys
     .map(function (modelKey) {
       var diag = diagnostics[modelKey];
@@ -2373,6 +2401,9 @@ function renderRoutingInspector(data) {
               String(Math.round((entry.healthScore || 0) * 100)) + "%",
             ) +
             "</td>" +
+            '<td style="padding:6px 8px;border-top:1px solid var(--border)">' +
+            renderHealthBreakdown(entry) +
+            "</td>" +
             '<td style="padding:6px 8px;border-top:1px solid var(--border);font-family:JetBrains Mono,monospace">' +
             escapeHtml(tokenText) +
             "</td>" +
@@ -2412,6 +2443,7 @@ function renderRoutingInspector(data) {
         '<th style="padding:4px 8px">Timer</th>' +
         '<th style="padding:4px 8px">Quota</th>' +
         '<th style="padding:4px 8px">Health</th>' +
+        '<th style="padding:4px 8px">Health breakdown</th>' +
         '<th style="padding:4px 8px">Bucket</th>' +
         '<th style="padding:4px 8px">Score</th>' +
         '<th style="padding:4px 8px">Decision</th>' +
