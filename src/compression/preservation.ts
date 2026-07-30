@@ -56,7 +56,9 @@ const PATTERNS: Array<{
   // Absolute Unix / Windows file paths or relative paths starting with ./ or ../
   {
     type: "file_path",
-    regex: /(?:(?:\/[a-zA-Z0-9_.-]+)+|(?:(?:\.\.|\.)\/[a-zA-Z0-9_.-]+)+|[a-zA-Z]:\\[a-zA-Z0-9_.-]+\\[a-zA-Z0-9_.-]+)\.[a-zA-Z0-9]+/g,
+    // Keep the path body as a single character class. Nested repetitions here
+    // made malformed relative paths trigger exponential backtracking.
+    regex: /(?:\/[a-zA-Z0-9_./-]+|(?:\.\.?\/[a-zA-Z0-9_./-]+)|[a-zA-Z]:\\[a-zA-Z0-9_.\\-]+)\.[a-zA-Z0-9]+/g,
   },
   // Env variables ($VAR, ${VAR}, or ALL_CAPS_VAR=)
   {

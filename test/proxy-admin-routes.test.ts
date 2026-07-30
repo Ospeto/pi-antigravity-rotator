@@ -95,4 +95,24 @@ describe("proxy admin routes", () => {
     assert.match(body, /Session Expired/);
     assert.doesNotMatch(body, /Unauthorized/);
   });
+
+  it("does not expose config import exception details", async () => {
+    const { rotator } = makeRotator();
+    server = await startTestProxy(rotator);
+    const port = (server.address() as AddressInfo).port;
+
+    const response = await fetch(
+      `http://127.0.0.1:${port}/api/config?token=secret`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: "{ invalid json",
+      },
+    );
+    const body = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(body, { ok: false, error: "Invalid config request" });
+    assert.doesNotMatch(JSON.stringify(body), /Unexpected token|SyntaxError/);
+  });
 });

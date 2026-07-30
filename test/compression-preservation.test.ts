@@ -47,6 +47,18 @@ More text after code.`;
     assert.strictEqual(restored, input);
   });
 
+  it("handles adversarial relative paths without catastrophic backtracking", () => {
+    const input = "./" + "-../".repeat(28) + "!";
+    const startedAt = performance.now();
+
+    extractPreservedBlocks(input);
+
+    assert.ok(
+      performance.now() - startedAt < 500,
+      "path preservation regex took too long",
+    );
+  });
+
   it("preserves environment variables and versions", () => {
     const input = "Use $PI_ROTATOR_DIR with version v2.5.0 and ${NODE_ENV}.";
     const { text, blocks, restore } = extractPreservedBlocks(input);

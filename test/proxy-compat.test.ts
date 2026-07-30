@@ -227,6 +227,38 @@ describe("proxy compat integration", () => {
 			await closeServer(prod.server);
 		}
 	});
+
+	it("does not expose internal exception details from the compat proxy", async () => {
+		const upstream = await listenServer((_req, res) => {
+			res.writeHead(200, { "Content-Type": "text/event-stream" });
+			res.end("data: {}\n\n");
+		});
+		endpointOverrides.splice(0, endpointOverrides.length, upstream.url);
+
+		try {
+			const body = openAIToAntigravityBody({
+				model: "gemini-3-flash",
+				messages: [{ role: "user", content: "ping" }],
+			});
+			const outcome = await withRotation(
+				createRotatorStub(createAccount()),
+				body.model,
+				{},
+				body,
+				async () => {
+					throw new Error("internal file path /srv/secrets/config.json");
+				},
+			);
+
+			assert.equal(outcome.ok, false);
+			if (!outcome.ok) {
+				assert.equal(outcome.errorText, "Upstream request failed");
+				assert.doesNotMatch(outcome.errorText, /config\.json/);
+			}
+		} finally {
+			await closeServer(upstream.server);
+		}
+	});
 });
 
 describe("classifyUpstreamResponse", () => {

@@ -3,11 +3,22 @@ import {
   createDecipheriv,
   createHash,
   randomBytes,
+  scryptSync,
 } from "node:crypto";
 import type { Config } from "./types.js";
 import { logger } from "./logger.js";
 
-const PREFIX = "enc:v1:";
+const V1_PREFIX = "enc:v1:";
+const V2_PREFIX = "enc:v2:";
+const KEY_BYTES = 32;
+const V2_SALT_BYTES = 16;
+const V2_KDF_CONTEXT = "pi-antigravity-rotator:encryption:v2";
+const SCRYPT_OPTIONS = {
+  N: 16_384,
+  r: 8,
+  p: 1,
+  maxmem: 32 * 1024 * 1024,
+};
 let missingKeyWarned = false;
 const tokenLog = logger.child("token-encryption");
 
@@ -22,26 +33,41 @@ export function getEncryptionKey(): string | undefined {
 }
 
 /**
- * Derives a 32-byte Buffer key for AES-256-GCM.
- * If passphrase is 64 hex chars, converts it directly. Otherwise SHA-256 hashes it.
+ * Derives a 32-byte key for AES-256-GCM.
+ * High-entropy 64-hex keys are used directly; other key material goes through
+ * scrypt with a per-ciphertext salt when encrypting v2 tokens.
  */
-export function deriveKey(passphrase: string): Buffer {
-  if (/^[0-9a-fA-F]{64}$/.test(passphrase)) {
-    return Buffer.from(passphrase, "hex");
+export function deriveKey(
+  keyInput: string,
+  salt: string | Buffer = V2_KDF_CONTEXT,
+): Buffer {
+  if (/^[0-9a-fA-F]{64}$/.test(keyInput)) {
+    return Buffer.from(keyInput, "hex");
   }
-  return createHash("sha256").update(passphrase, "utf8").digest();
+  return scryptSync(keyInput, salt, KEY_BYTES, SCRYPT_OPTIONS);
+}
+
+/**
+ * Derives the v1 key only for decrypting persisted legacy ciphertext.
+ * New tokens never use this compatibility path.
+ */
+function deriveLegacyV1Key(keyInput: string): Buffer {
+  return createHash("sha256").update(keyInput, "utf8").digest();
 }
 
 /**
  * Checks whether a refresh token string is already encrypted.
  */
 export function isEncryptedToken(token: string): boolean {
-  return typeof token === "string" && token.startsWith(PREFIX);
+  return (
+    typeof token === "string" &&
+    (token.startsWith(V1_PREFIX) || token.startsWith(V2_PREFIX))
+  );
 }
 
 /**
  * Encrypts a plain-text OAuth refresh token using AES-256-GCM.
- * Format: enc:v1:<iv_hex>:<tag_hex>:<ciphertext_hex>
+ * Format: enc:v2:<salt_hex>:<iv_hex>:<tag_hex>:<ciphertext_hex>
  */
 export function encryptRefreshToken(
   plainToken: string,
@@ -50,13 +76,14 @@ export function encryptRefreshToken(
   if (!plainToken || isEncryptedToken(plainToken)) {
     return plainToken;
   }
-  const key = deriveKey(keyInput);
+  const salt = randomBytes(V2_SALT_BYTES);
+  const key = deriveKey(keyInput, salt);
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
   let encrypted = cipher.update(plainToken, "utf8", "hex");
   encrypted += cipher.final("hex");
   const tag = cipher.getAuthTag().toString("hex");
-  return `${PREFIX}${iv.toString("hex")}:${tag}:${encrypted}`;
+  return `${V2_PREFIX}${salt.toString("hex")}:${iv.toString("hex")}:${tag}:${encrypted}`;
 }
 
 /**
@@ -69,13 +96,20 @@ export function decryptRefreshToken(
   if (!encryptedToken || !isEncryptedToken(encryptedToken)) {
     return encryptedToken;
   }
-  const payload = encryptedToken.slice(PREFIX.length);
+  const isV2 = encryptedToken.startsWith(V2_PREFIX);
+  const prefix = isV2 ? V2_PREFIX : V1_PREFIX;
+  const payload = encryptedToken.slice(prefix.length);
   const parts = payload.split(":");
-  if (parts.length !== 3) {
+  if (parts.length !== (isV2 ? 4 : 3)) {
     throw new Error("Malformed encrypted refresh token format");
   }
-  const [ivHex, tagHex, ciphertextHex] = parts;
-  const key = deriveKey(keyInput);
+  const saltHex = isV2 ? parts[0] : undefined;
+  const ivHex = isV2 ? parts[1] : parts[0];
+  const tagHex = isV2 ? parts[2] : parts[1];
+  const ciphertextHex = isV2 ? parts[3] : parts[2];
+  const key = isV2
+    ? deriveKey(keyInput, Buffer.from(saltHex!, "hex"))
+    : deriveLegacyV1Key(keyInput);
   const iv = Buffer.from(ivHex, "hex");
   const tag = Buffer.from(tagHex, "hex");
   const decipher = createDecipheriv("aes-256-gcm", key, iv);

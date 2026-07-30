@@ -57,16 +57,24 @@ describe("token encryption", () => {
     assert.equal(key2.toString("hex"), hex64);
   });
 
-  it("encrypts and decrypts refresh tokens round-trip", () => {
+  it("encrypts and decrypts refresh tokens with the versioned KDF format", () => {
     const plain = "1//04abcdef1234567890_refresh_token_test";
     const secret = "super-secret-passphrase";
 
     const encrypted = encryptRefreshToken(plain, secret);
     assert.ok(isEncryptedToken(encrypted));
-    assert.ok(encrypted.startsWith("enc:v1:"));
+    assert.ok(encrypted.startsWith("enc:v2:"));
+    assert.equal(encrypted.split(":").length, 6);
 
     const decrypted = decryptRefreshToken(encrypted, secret);
     assert.equal(decrypted, plain);
+  });
+
+  it("decrypts existing v1 tokens for backward compatibility", () => {
+    const legacy =
+      "enc:v1:ed6423ed963d2f492056bb6f:a27da3778c8d401e0c0a79816dcd7eec:c11c428bc7e1c632ce09ae569256d393acf41eab";
+
+    assert.equal(decryptRefreshToken(legacy, "legacy-secret"), "legacy-refresh-token");
   });
 
   it("does not re-encrypt an already encrypted token", () => {
@@ -102,7 +110,7 @@ describe("token encryption", () => {
     const { config: plainConfig, migrated } = decryptAccountsInConfig(initialConfig, secret);
     assert.equal(migrated, true);
 
-    // Encrypting config replaces plain tokens with enc:v1:... tokens
+    // Encrypting config replaces plain tokens with enc:v2:... tokens
     const encryptedConfig = encryptAccountsInConfig(plainConfig, secret);
     assert.ok(isEncryptedToken(encryptedConfig.accounts[0].refreshToken));
     assert.ok(isEncryptedToken(encryptedConfig.accounts[1].refreshToken));

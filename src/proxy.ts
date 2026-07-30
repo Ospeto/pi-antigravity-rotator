@@ -97,6 +97,7 @@ import { logSpend } from "./spend-logger.js";
 import { hashKey } from "./virtual-keys.js";
 
 const proxyLogger = logger.child("proxy");
+const GENERIC_UPSTREAM_ERROR = "Upstream request failed";
 
 const DEFAULT_STREAM_RECOVERY_MAX_RETRIES = 2;
 const MAX_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes max cooldown
@@ -1335,9 +1336,11 @@ export async function serveBenchmarkApi(
       results: sortedResults,
     });
   } catch (err) {
+    const details = formatError(err);
+    proxyLogger.error(`Benchmark failed: ${details}`);
     writeBenchmarkEvent(res, {
       type: "error",
-      error: formatError(err),
+      error: "Benchmark failed",
     });
   } finally {
     res.off("close", onClose);
@@ -1509,7 +1512,7 @@ export async function withRotation<T>(
         return {
           ok: false,
           status: 502,
-          errorText: formattedError,
+          errorText: GENERIC_UPSTREAM_ERROR,
           context: {
             account,
             label,
@@ -1956,7 +1959,7 @@ async function handleProxyRequest(
       }
       if (!isFetchTransportError(err) || attempt >= maxRetries) {
         res.writeHead(502, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: formattedError }));
+        res.end(JSON.stringify({ error: GENERIC_UPSTREAM_ERROR }));
         return;
       }
       const nextAccount = await rotateAndRelease();
@@ -2181,13 +2184,17 @@ export function startProxy(
           );
         })
         .catch((err) => {
-          res.writeHead(err instanceof PayloadTooLargeError ? 413 : 400, {
+          const isPayloadTooLarge = err instanceof PayloadTooLargeError;
+          proxyLogger.warn(`Config import request failed: ${formatError(err)}`);
+          res.writeHead(isPayloadTooLarge ? 413 : 400, {
             "Content-Type": "application/json",
           });
           res.end(
             JSON.stringify({
               ok: false,
-              error: err instanceof Error ? err.message : String(err),
+              error: isPayloadTooLarge
+                ? "Payload too large"
+                : "Invalid config request",
             }),
           );
         });
