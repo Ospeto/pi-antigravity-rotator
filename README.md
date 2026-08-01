@@ -190,7 +190,7 @@ The dashboard shows:
 - **Latency (p50/p95)** — per-model TTFB and total duration
 - **Activity heatmap** — 60-day GitHub-style request intensity grid
 - **Quota forecast** — tier-weighted depletion predictions
-- **Routing inspector** — on-demand modal with candidate scores and rejection reasons
+- **Routing inspector** — on-demand modal with candidate scores, health-score breakdown, and rejection reasons
 
 ![Dashboard](dashboard.png)
 
