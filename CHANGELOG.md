@@ -5,6 +5,9 @@
 ### Added
 - **Routing Inspector Health Breakdown**: Show quota, error, cooldown, availability, and final-score components for each routing candidate.
 
+### Fixed
+- **Claude Code Tool Schemas**: Strip the unsupported JSON Schema `propertyNames` keyword from Gemini and Claude-via-Gemini tool declarations, preventing `400 INVALID_ARGUMENT` responses while preserving neighboring schema fields. ([PR #19](https://github.com/tuxevil/pi-antigravity-rotator/pull/19) by [@Codder-hermes](https://github.com/Codder-hermes))
+
 ### Verified
 - **Incremental Streaming**: Added integration coverage proving OpenAI Chat, Responses, Anthropic, and native adapters deliver upstream chunks before completion.
 

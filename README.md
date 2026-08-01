@@ -258,6 +258,7 @@ To donate an authorized Google account for testing, see [CONTRIBUTING.md](CONTRI
 
 Thanks to these amazing people who have contributed to the project:
 
+- **[@Codder-hermes](https://github.com/Codder-hermes)** — Fixed Claude Code tool-schema requests by stripping the unsupported JSON Schema `propertyNames` keyword for Gemini and Claude-via-Gemini routes, with regression coverage for both compatibility paths. ([PR #19](https://github.com/tuxevil/pi-antigravity-rotator/pull/19))
 - **[@CyR1en](https://github.com/CyR1en)** (Ethan Bacurio) — Added the Gemini 3.6 Flash model family, shared quota-pool routing, pricing, dashboard support, and regression coverage. ([PR #18](https://github.com/tuxevil/pi-antigravity-rotator/pull/18))
 - **[@josenicomaia](https://github.com/josenicomaia)** (José Nicodemos Maia Neto) — Modularized the compatibility layer architecture, added multimodal tool response support, and fixed streaming pass-through for tool executions. ([PR #8](https://github.com/tuxevil/pi-antigravity-rotator/pull/8), [PR #9](https://github.com/tuxevil/pi-antigravity-rotator/pull/9), [PR #11](https://github.com/tuxevil/pi-antigravity-rotator/pull/11))
 - **[@yashyadav711](https://github.com/yashyadav711)** (Yash) — Fixed Draft-2020-12 inline JSON-Schema union type mapping for Gemini tools support. ([PR #10](https://github.com/tuxevil/pi-antigravity-rotator/pull/10))
