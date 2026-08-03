@@ -34,6 +34,46 @@ switch (command) {
     await runLogin();
     break;
   }
+  case "import": {
+    const { initDb, closeDb } = await import("./db-store.js");
+    await initDb();
+    const { importAccountsToConfig } = await import("./account-store.js");
+    const fs = await import("node:fs/promises");
+    const { resolve } = await import("node:path");
+    const { homedir } = await import("node:os");
+
+    let filePath = args[1];
+    if (!filePath) {
+      const defaultConfigPath = resolve(homedir(), ".config", "antigravity", "accounts.json");
+      try {
+        await fs.access(defaultConfigPath);
+        filePath = defaultConfigPath;
+        console.log(`No file path provided. Defaulting to: ${filePath}`);
+      } catch {
+        console.error("Usage: pi-antigravity-rotator import <path-to-json-file>");
+        process.exit(1);
+      }
+    }
+
+    try {
+      const resolvedPath = resolve(filePath);
+      console.log(`Reading accounts from: ${resolvedPath}`);
+      const fileContent = await fs.readFile(resolvedPath, "utf-8");
+      const parsed = JSON.parse(fileContent);
+
+      const result = await importAccountsToConfig(parsed);
+      console.log(`Successfully imported accounts!`);
+      console.log(`  Added:   ${result.added}`);
+      console.log(`  Updated: ${result.updated}`);
+      console.log(`  Total:   ${result.total}`);
+    } catch (err) {
+      console.error(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
+      process.exitCode = 1;
+    } finally {
+      await closeDb();
+    }
+    break;
+  }
   case "status": {
     const { initDb, closeDb } = await import("./db-store.js");
     const {
@@ -180,6 +220,7 @@ switch (command) {
     console.log("Usage:");
     console.log("  pi-antigravity-rotator start     Start the proxy (default)");
     console.log("  pi-antigravity-rotator login     Add a new Google account");
+    console.log("  pi-antigravity-rotator import    Import accounts from JSON file (default: ~/.config/antigravity/accounts.json)");
     console.log(
       "  pi-antigravity-rotator status    Show account status (JSON)",
     );

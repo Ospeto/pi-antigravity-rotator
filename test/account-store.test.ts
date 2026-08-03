@@ -1,15 +1,14 @@
-import { describe, it, before, after } from "node:test";
+import { describe, it, before } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, existsSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import {
 	validateAccountConfigLengths,
+	importAccountsToConfig,
 	MAX_EMAIL_LENGTH,
 	MAX_LABEL_LENGTH,
 	MAX_PROJECT_ID_LENGTH,
 	MAX_REFRESH_TOKEN_LENGTH,
 } from "../src/account-store.js";
+import { initDb } from "../src/db-store.js";
 
 function makeAccount(overrides: Record<string, string> = {}): {
 	email: string;
@@ -76,5 +75,27 @@ describe("validateAccountConfigLengths (S11)", () => {
 		assert.equal(MAX_LABEL_LENGTH, 100);
 		assert.equal(MAX_PROJECT_ID_LENGTH, 100);
 		assert.equal(MAX_REFRESH_TOKEN_LENGTH, 4096);
+	});
+});
+
+describe("importAccountsToConfig", () => {
+	before(async () => {
+		await initDb();
+	});
+
+	it("imports accounts from Pi accounts export format array", async () => {
+		const result = await importAccountsToConfig([
+			{ email: "import1@example.com", refresh_token: "rt-1" },
+			{ email: "import2@example.com", refresh_token: "rt-2" },
+		]);
+		assert.equal(result.total, 2);
+		assert.equal(result.added + result.updated, 2);
+	});
+
+	it("throws an error for invalid accounts format", async () => {
+		await assert.rejects(
+			() => importAccountsToConfig({ accounts: [{ email: "" }] }),
+			/Invalid accounts format/,
+		);
 	});
 });

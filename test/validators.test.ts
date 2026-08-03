@@ -34,7 +34,29 @@ describe("validators", () => {
 		assert.equal(result.ok, false);
 		assert.match(formatValidationErrors(result.errors), /email/);
 		assert.match(formatValidationErrors(result.errors), /refreshToken/);
-		assert.match(formatValidationErrors(result.errors), /projectId/);
+	});
+
+	it("accepts Pi accounts export format with snake_case refresh_token and missing projectId", () => {
+		const result = validateAccountConfig({
+			email: "user@example.com",
+			refresh_token: "refresh-token-123",
+		});
+		assert.equal(result.ok, true);
+		assert.equal(result.value?.email, "user@example.com");
+		assert.equal(result.value?.refreshToken, "refresh-token-123");
+		assert.equal(result.value?.projectId, "default-project");
+		assert.equal(result.value?.label, "user");
+	});
+
+	it("accepts top-level array of accounts in validateConfig", () => {
+		const result = validateConfig([
+			{ email: "a@example.com", refresh_token: "rt1" },
+			{ email: "b@example.com", refresh_token: "rt2" },
+		]);
+		assert.equal(result.ok, true);
+		assert.equal(result.value?.accounts.length, 2);
+		assert.equal(result.value?.accounts[0].email, "a@example.com");
+		assert.equal(result.value?.accounts[0].refreshToken, "rt1");
 	});
 
 	it("accepts a valid config with optional fields", () => {

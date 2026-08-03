@@ -11,6 +11,8 @@ import {
 } from "./config-storage.js";
 import { applyConfigDefaults, getDefaultConfig } from "./config-defaults.js";
 
+import { validateConfig } from "./validators.js";
+
 export {
   loadConfig,
   loadOrCreateAccountsConfig,
@@ -74,6 +76,27 @@ export async function addAccountToConfig(
   config.accounts.push(entry);
   await saveAccountsConfig(config);
   return { isNew: true };
+}
+
+export async function importAccountsToConfig(
+  input: unknown,
+): Promise<{ added: number; updated: number; total: number }> {
+  const validation = validateConfig(input);
+  if (!validation.ok || !validation.value) {
+    throw new Error(
+      `Invalid accounts format: ${validation.errors.join("; ")}`,
+    );
+  }
+  let added = 0;
+  let updated = 0;
+  for (const account of validation.value.accounts) {
+    const res = await addAccountToConfig(account);
+    if (res.isNew) added++;
+    else updated++;
+  }
+  await ensurePiModelsConfig();
+  await ensurePiAuthConfig();
+  return { added, updated, total: validation.value.accounts.length };
 }
 
 export async function removeAccountFromConfig(email: string): Promise<boolean> {
