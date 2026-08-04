@@ -342,6 +342,7 @@ type UpstreamActionHandlerOptions = {
   context: RotationAttemptContext;
   logRequestEnd: (status: string | number, extra?: string) => void;
   rotateAndRelease: () => Promise<AccountRuntime | null>;
+  rotateForRetry: () => Promise<AccountRuntime | null>;
   canRetry: boolean;
   writeLog: (message: string, level?: "info" | "warn" | "error") => void;
   recordFailureAttempt?: (statusCode: number) => void;
@@ -398,6 +399,7 @@ async function handleUpstreamAccountAction(
     label,
     logRequestEnd,
     rotateAndRelease,
+    rotateForRetry,
     writeLog,
     recordFailureAttempt,
   } = options;
@@ -419,6 +421,17 @@ async function handleUpstreamAccountAction(
       429,
       `cooldownMs=${action.cooldownMs}${action.providerResourceExhausted ? " resourceExhausted=true" : ""} endpoint=${action.endpoint}`,
     );
+    if (action.providerResourceExhausted && options.canRetry) {
+      const nextAccount = await rotateForRetry();
+      if (!nextAccount) {
+        return buildNoReplacementDecision(
+          options,
+          `no replacement account remained after ${label} exhausted quota`,
+        );
+      }
+      writeLog(`[${label}] quota exhausted; retrying on replacement account`, "warn");
+      return { kind: "retry" };
+    }
     return buildFailureDecision(options, 429, action.errorText, {
       retryAfterMs: action.cooldownMs,
       providerResourceExhausted: action.providerResourceExhausted,
@@ -458,7 +471,7 @@ async function handleUpstreamAccountAction(
     if (!options.canRetry) {
       return buildFailureDecision(options, 401, action.errorText);
     }
-    const nextAccount = await rotateAndRelease();
+    const nextAccount = await rotateForRetry();
     if (!nextAccount) {
       return buildNoReplacementDecision(
         options,
@@ -495,7 +508,7 @@ async function handleUpstreamAccountAction(
     if (!options.canRetry) {
       return buildFailureDecision(options, 403, action.errorText);
     }
-    const nextAccount = await rotateAndRelease();
+    const nextAccount = await rotateForRetry();
     if (!nextAccount) {
       return buildNoReplacementDecision(
         options,
@@ -545,7 +558,7 @@ async function handleUpstreamAccountAction(
     if (!options.canRetry) {
       return buildFailureDecision(options, 503, action.errorText);
     }
-    const nextAccount = await rotateAndRelease();
+    const nextAccount = await rotateForRetry();
     if (!nextAccount) {
       return buildNoReplacementDecision(
         options,
@@ -568,7 +581,7 @@ async function handleUpstreamAccountAction(
   if (!options.canRetry) {
     return buildFailureDecision(options, action.httpStatus, action.errorText);
   }
-  const nextAccount = await rotateAndRelease();
+  const nextAccount = await rotateForRetry();
   if (!nextAccount) {
     return buildNoReplacementDecision(
       options,
@@ -1389,6 +1402,7 @@ export async function withRotation<T>(
     };
   };
 
+  let retryAccount: AccountRuntime | null = null;
   const rotateAndRelease = async (): Promise<AccountRuntime | null> => {
     const nextAccount = await rotator.rotateToNext(model);
     if (nextAccount) {
@@ -1399,12 +1413,17 @@ export async function withRotation<T>(
     }
     return nextAccount;
   };
+  const rotateForRetry = async (): Promise<AccountRuntime | null> => {
+    retryAccount = await rotator.rotateToNext(model);
+    return retryAccount;
+  };
 
   const maxRetries = getStreamRecoveryMaxRetries(rotator);
   const maxAttempts = maxRetries + 1;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const account = await rotator.getActiveAccount(model);
+    const account = retryAccount ?? (await rotator.getActiveAccount(model));
+    retryAccount = null;
     if (!account) {
       return sendNoAccountsAvailable("rotation returned no available account");
     }
@@ -1486,6 +1505,7 @@ export async function withRotation<T>(
           context,
           logRequestEnd,
           rotateAndRelease,
+          rotateForRetry,
           canRetry: attempt < maxRetries,
           writeLog: (message, level = "info") => log(message, rotator, level),
         });
@@ -1549,7 +1569,7 @@ export async function withRotation<T>(
           totalMs: Date.now() - requestStartMs,
         };
       }
-      const nextAccount = await rotateAndRelease();
+      const nextAccount = await rotateForRetry();
       if (!nextAccount) {
         return sendNoAccountsAvailable(
           `no replacement account remained after ${label} request error`,
@@ -1680,6 +1700,7 @@ async function handleProxyRequest(
       }),
     );
   };
+  let retryAccount: AccountRuntime | null = null;
   const rotateAndRelease = async (): Promise<AccountRuntime | null> => {
     const nextAccount = await rotator.rotateToNext(body.model);
     if (nextAccount) {
@@ -1689,6 +1710,10 @@ async function handleProxyRequest(
       );
     }
     return nextAccount;
+  };
+  const rotateForRetry = async (): Promise<AccountRuntime | null> => {
+    retryAccount = await rotator.rotateToNext(body.model);
+    return retryAccount;
   };
   const sendFailureDecision = (decision: UpstreamFailureDecision): void => {
     if (decision.noReplacementReason) {
@@ -1709,7 +1734,7 @@ async function handleProxyRequest(
             ? "Resource exhausted"
             : "Rate limited",
           reason: decision.providerResourceExhausted
-            ? `${label} hit provider RESOURCE_EXHAUSTED; not retrying another account to avoid pool-wide hammering`
+            ? `${label} hit provider RESOURCE_EXHAUSTED; account rotation retry budget exhausted`
             : `${label} was rate limited; not retrying another account for account-safety`,
           model: body.model,
           account: label,
@@ -1757,7 +1782,8 @@ async function handleProxyRequest(
   const maxRetries = getStreamRecoveryMaxRetries(rotator);
   const maxAttempts = maxRetries + 1;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const account = await rotator.getActiveAccount(body.model);
+    const account = retryAccount ?? (await rotator.getActiveAccount(body.model));
+    retryAccount = null;
     if (!account) {
       sendNoAccountsAvailable("rotation returned no available account");
       return;
@@ -1851,6 +1877,7 @@ async function handleProxyRequest(
           context,
           logRequestEnd,
           rotateAndRelease,
+          rotateForRetry,
           canRetry: attempt < maxRetries,
           writeLog: proxyLog,
           recordFailureAttempt: recordOutcome,
@@ -1967,7 +1994,7 @@ async function handleProxyRequest(
         res.end(JSON.stringify({ error: GENERIC_UPSTREAM_ERROR }));
         return;
       }
-      const nextAccount = await rotateAndRelease();
+      const nextAccount = await rotateForRetry();
       if (!nextAccount) {
         sendNoAccountsAvailable(
           `no replacement account remained after ${label} request error`,
