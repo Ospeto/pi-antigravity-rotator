@@ -536,7 +536,12 @@ async function handleUpstreamAccountAction(
     );
     recordFailureAttempt?.(503);
     logRequestEnd(503, `endpoint=${action.endpoint}`);
-    rotator.markError(account, `503: ${action.errorText.slice(0, 200)}`);
+    rotator.markExhausted(
+      account,
+      model,
+      30_000,
+      `503: ${action.errorText.slice(0, 200)}`,
+    );
     if (!options.canRetry) {
       return buildFailureDecision(options, 503, action.errorText);
     }

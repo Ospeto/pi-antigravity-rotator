@@ -388,4 +388,64 @@ describe("v2 routing and status", () => {
         reason.indexOf("quota is exhausted for this model"),
     );
   });
+
+  it("supports sequential-quota policy: sticky success, quota switch, 503 no disable", async () => {
+    const config = makeConfig();
+    config.routingPolicy = "sequential-quota";
+    config.requestsPerRotation = 2; // threshold low to verify sticky behaviour
+    const rotator = new AccountRotator(config) as any;
+    rotator.stopQuotaPolling();
+    for (const a of rotator.accounts) {
+      a.accessToken = "test-token";
+      a.tokenExpires = Date.now() + 3_600_000;
+      a.quota = [
+        {
+          modelKey: "gemini-3.1-pro",
+          displayName: "G3.1Pro",
+          percentRemaining: 100,
+          resetTime: null,
+          timerType: "fresh",
+        },
+      ];
+    }
+
+    // 1. Sticky success: getActiveAccount stays on a@example.com across multiple calls
+    const acc1 = await rotator.getActiveAccount("gemini-3.1-pro");
+    assert.equal(acc1?.config.email, "a@example.com");
+    rotator.finishRequest(acc1, "gemini-3.1-pro");
+
+    const acc2 = await rotator.getActiveAccount("gemini-3.1-pro");
+    assert.equal(acc2?.config.email, "a@example.com");
+    rotator.recordRequest(acc2, "gemini-3.1-pro");
+    rotator.finishRequest(acc2, "gemini-3.1-pro");
+
+    const acc3 = await rotator.getActiveAccount("gemini-3.1-pro");
+    assert.equal(acc3?.config.email, "a@example.com");
+    rotator.finishRequest(acc3, "gemini-3.1-pro");
+
+    // 2. 503 error: sets cooldown, does not disable, does not permanently switch active account
+    rotator.markExhausted(acc3, "gemini-3.1-pro", 30_000, "503: unavailable");
+    assert.equal(acc3.disabled, false);
+
+    // Temporary fallback during cooldown goes to b@example.com
+    const fallbackAcc = await rotator.getActiveAccount("gemini-3.1-pro");
+    assert.equal(fallbackAcc?.config.email, "b@example.com");
+    rotator.finishRequest(fallbackAcc, "gemini-3.1-pro");
+
+    // Once cooldown is cleared, active account is still a@example.com
+    acc3.cooldownsByModel["gemini-3.1-pro"] = 0;
+    const restoredAcc = await rotator.getActiveAccount("gemini-3.1-pro");
+    assert.equal(restoredAcc?.config.email, "a@example.com");
+    rotator.finishRequest(restoredAcc, "gemini-3.1-pro");
+
+    // 3. Confirmed hard quota exhaustion: permanently switches active account to b@example.com
+    rotator.accounts[0].quota[0].percentRemaining = 0;
+    const nextActive = await rotator.getActiveAccount("gemini-3.1-pro");
+    assert.equal(nextActive?.config.email, "b@example.com");
+    rotator.finishRequest(nextActive, "gemini-3.1-pro");
+
+    // 4. In-flight requests are 0 when finished
+    assert.equal(rotator.accounts[0].inFlightRequests, 0);
+    assert.equal(rotator.accounts[1].inFlightRequests, 0);
+  });
 });

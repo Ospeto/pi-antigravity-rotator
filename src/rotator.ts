@@ -897,6 +897,10 @@ export class AccountRotator {
     modelKey: string,
     state: ModelRotationState | null,
   ): boolean {
+    const policy = this.config.routingPolicy || "timer-first";
+    if (policy === "sequential-quota" || policy === "sticky-quota") {
+      return false;
+    }
     return (
       !!state &&
       this.shouldUseRequestCountRotation(account, modelKey) &&
@@ -1185,6 +1189,9 @@ export class AccountRotator {
     },
     policy: Config["routingPolicy"],
   ): boolean {
+    if (policy === "sequential-quota" || policy === "sticky-quota") {
+      return candidate.distance < best.distance;
+    }
     if (policy === "hybrid") {
       return (
         candidate.hybridScore > best.hybridScore ||
@@ -1442,6 +1449,13 @@ export class AccountRotator {
     ) {
       // Check if this account has quota for the requested model
       if (modelKey) {
+        if (!state) {
+          this.modelState.set(modelKey, {
+            activeAccountIndex: idx,
+            quotaAtRotationStart: this.getModelQuota(current, modelKey),
+            requestsOnActiveAccount: 0,
+          });
+        }
         if (this.shouldRotateBeforeRequest(current, modelKey, state ?? null)) {
           this.log(
             `${current.config.label || current.config.email} [${modelKey}]: hit rotation threshold (${this.config.requestsPerRotation})`,
@@ -1516,13 +1530,34 @@ export class AccountRotator {
       const newIdx = this.accounts.indexOf(best);
       const quota = this.getModelQuota(best, modelKey);
       const timerType = this.getModelTimerType(best, modelKey);
-      this.modelState.set(modelKey, {
-        activeAccountIndex: newIdx,
-        quotaAtRotationStart: quota,
-        requestsOnActiveAccount: 0,
-      });
+
+      const policy = this.config.routingPolicy || "timer-first";
+      const isSequentialQuota =
+        policy === "sequential-quota" || policy === "sticky-quota";
+
+      const currentActiveIdx =
+        this.modelState.get(modelKey)?.activeAccountIndex;
+      const currentActiveAccount =
+        currentActiveIdx !== undefined ? this.accounts[currentActiveIdx] : null;
+
+      const isTransientCooldownOnly =
+        isSequentialQuota &&
+        currentActiveAccount !== null &&
+        !currentActiveAccount.disabled &&
+        !currentActiveAccount.flagged &&
+        this.getModelQuota(currentActiveAccount, modelKey) > 0;
+
+      if (!isTransientCooldownOnly) {
+        this.modelState.set(modelKey, {
+          activeAccountIndex: newIdx,
+          quotaAtRotationStart: quota,
+          requestsOnActiveAccount: 0,
+        });
+        await this.saveState();
+      }
+
       this.log(
-        `[${modelKey}] Rotated to ${best.config.label || best.config.email} [${timerType}] (quota: ${quota >= 0 ? quota + "%" : "unknown"})`,
+        `[${modelKey}] ${isTransientCooldownOnly ? "Temporary fallback" : "Rotated"} to ${best.config.label || best.config.email} [${timerType}] (quota: ${quota >= 0 ? quota + "%" : "unknown"})`,
       );
       await this.saveState();
       this.startRequest(best, modelKey);
@@ -1652,7 +1687,11 @@ export class AccountRotator {
 
     const modelKey = model ? resolveQuotaModelKey(model) : null;
     const state = modelKey ? this.modelState.get(modelKey) : null;
+    const policy = this.config.routingPolicy || "timer-first";
+    const isSequentialQuota =
+      policy === "sequential-quota" || policy === "sticky-quota";
     const shouldRotate =
+      !isSequentialQuota &&
       !!modelKey &&
       !!state &&
       this.accounts[state.activeAccountIndex] === account &&

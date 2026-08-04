@@ -87,7 +87,10 @@ describe("validators", () => {
 				quotaPollIntervalMs: interval,
 			});
 			assert.equal(result.ok, false);
-			assert.match(formatValidationErrors(result.errors), /quotaPollIntervalMs/);
+			assert.match(
+				formatValidationErrors(result.errors),
+				/quotaPollIntervalMs/,
+			);
 		}
 	});
 
@@ -113,7 +116,10 @@ describe("validators", () => {
 				streamRecoveryMaxRetries: value,
 			});
 			assert.equal(result.ok, false);
-			assert.match(formatValidationErrors(result.errors), /streamRecoveryMaxRetries/);
+			assert.match(
+				formatValidationErrors(result.errors),
+				/streamRecoveryMaxRetries/,
+			);
 		}
 	});
 
@@ -127,7 +133,10 @@ describe("validators", () => {
 	});
 
 	it("does not require project in proxy request because proxy overwrites it", () => {
-		const result = validateProxyRequestBody({ model: "claude-sonnet-4-6", request: {} });
+		const result = validateProxyRequestBody({
+			model: "claude-sonnet-4-6",
+			request: {},
+		});
 		assert.equal(result.ok, true);
 	});
 

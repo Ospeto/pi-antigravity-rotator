@@ -48,7 +48,8 @@ describe("validateAccountConfigLengths (S11)", () => {
 	it("rejects a projectId longer than 100 chars", () => {
 		const longProject = "p".repeat(MAX_PROJECT_ID_LENGTH + 1);
 		assert.throws(
-			() => validateAccountConfigLengths(makeAccount({ projectId: longProject })),
+			() =>
+				validateAccountConfigLengths(makeAccount({ projectId: longProject })),
 			/exceeds maximum length 100/,
 		);
 	});
@@ -56,7 +57,8 @@ describe("validateAccountConfigLengths (S11)", () => {
 	it("rejects a refreshToken longer than 4096 chars", () => {
 		const longToken = "1//" + "x".repeat(MAX_REFRESH_TOKEN_LENGTH);
 		assert.throws(
-			() => validateAccountConfigLengths(makeAccount({ refreshToken: longToken })),
+			() =>
+				validateAccountConfigLengths(makeAccount({ refreshToken: longToken })),
 			/exceeds maximum length 4096/,
 		);
 	});
