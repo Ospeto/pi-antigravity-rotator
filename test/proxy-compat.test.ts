@@ -285,6 +285,68 @@ describe("classifyUpstreamResponse", () => {
 		}
 	});
 
+	it("retries quota exhaustion on the next account", async () => {
+		let attempts = 0;
+		const authorizationHeaders: string[] = [];
+		const upstream = await listenServer((req, res) => {
+			attempts++;
+			authorizationHeaders.push(String(req.headers.authorization));
+			if (attempts === 1) {
+				res.writeHead(429, { "Content-Type": "application/json" });
+				res.end('{"error":{"status":"RESOURCE_EXHAUSTED","message":"quota exceeded"}}');
+				return;
+			}
+			res.writeHead(200, { "Content-Type": "text/plain" });
+			res.end("ok");
+		});
+		endpointOverrides.splice(0, endpointOverrides.length, upstream.url);
+
+		const first = createAccount();
+		const second = createAccount();
+		second.config.email = "second@example.com";
+		second.config.label = "second-account";
+		second.accessToken = "second-access-token";
+		let active = 0;
+		let activeAccountReads = 0;
+		let exhausted = 0;
+		const accounts = [first, second];
+		const base = createRotatorStub(first);
+		const rotator = {
+			...base,
+			getActiveAccount: async () => {
+				activeAccountReads++;
+				return accounts[active];
+			},
+			rotateToNext: async () => {
+				active++;
+				return accounts[active] ?? null;
+			},
+			markExhausted: () => {
+				exhausted++;
+			},
+			getConfig: () => ({ streamRecoveryMaxRetries: 2 }),
+		} as unknown as AccountRotator;
+
+		try {
+			const outcome = await withRotation(
+				rotator,
+				"gemini-3.6-flash",
+				{},
+				{ project: "test-project", model: "gemini-3.6-flash", request: {} },
+				async (response) => response.text(),
+			);
+
+			assert.equal(outcome.ok, true);
+			if (outcome.ok) assert.equal(outcome.result, "ok");
+			assert.equal(attempts, 2);
+			assert.equal(activeAccountReads, 1, "retry uses the reserved replacement account");
+			assert.equal(exhausted, 1);
+			assert.deepEqual(authorizationHeaders, ["Bearer access-token", "Bearer second-access-token"]);
+		} finally {
+			await closeServer(upstream.server);
+		}
+	});
+
 	it("classifies plain 429 as rate-limited (not resource-exhausted)", async () => {
 		const action = await classifyUpstreamResponse(
 			response(429, "rate_limit_exceeded"),

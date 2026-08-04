@@ -75,6 +75,7 @@ type RotatorTracking = {
 type RotatorOptions = {
 	accounts?: AccountRuntime[];
 	streamRecoveryMaxRetries?: number;
+	retryAfterMs?: number;
 };
 
 function makeRotator(
@@ -92,7 +93,7 @@ function makeRotator(
 	let activeIndex = 0;
 	return {
 		getActiveAccount: async () => accounts[activeIndex],
-		getRetryAfterMs: () => 0,
+		getRetryAfterMs: () => options.retryAfterMs ?? 0,
 		rotateToNext: async () => {
 			if (activeIndex >= accounts.length - 1) return null;
 			activeIndex += 1;
@@ -403,7 +404,9 @@ describe("proxy e2e: 429 rate-limited", () => {
 		endpointOverrides.splice(0, endpointOverrides.length, upstream.url);
 
 		const tracking = { markExhausted: 0, recordProvider429: 0, finishRequest: 0 };
-		const rotator = makeRotator(makeAccount("quota@example.com"), tracking);
+		const rotator = makeRotator(makeAccount("quota@example.com"), tracking, {
+			retryAfterMs: 1_800_000,
+		});
 
 		try {
 			const outcome = await withRotation(
